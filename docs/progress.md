@@ -1,0 +1,45 @@
+# Hylyre 工程进度
+
+## 2026-05-11 · P0.7 完成（本机 pip / pytest / hylyre）
+
+- **Python**：已通过 `winget install --id Python.Python.3.12 -e` 安装 **3.12.10**（路径示例：`%LocalAppData%\Programs\Python\Python312\python.exe`）。**建议**将以下目录加入用户 PATH，便于直接敲 `python`、`pip`、`hylyre`、`pytest`：
+  - `%LocalAppData%\Programs\Python\Python312\`
+  - `%LocalAppData%\Programs\Python\Python312\Scripts\`
+- **安装与验证**（在仓库根 `e:\1.code\Hylyre`）：
+  - `python -m pip install -e ".[dev]"` ✅
+  - `python -m hylyre doctor` ✅（已修复：`doctor` 子命令与 `doctor` 模块同名导致的 `AttributeError`，改为 `import doctor as doctor_cmd`）
+  - `python -m pytest` ✅ **15 passed**
+- **`hylyre doctor` 当前环境**：Python / Node / npm / hdc ✅；**mitmproxy** 未在 PATH（预期 P2 前可选；Lyrebird 需要时安装）。
+- **OpenSpec**：`openspec/changes/add-mvp-skeleton/tasks.md` 中 **8.8** 项 23–29 已勾选（git commit 仍待你授权）。
+
+### P0 总体状态
+
+| 阶段 | 状态 |
+|------|------|
+| P0.1–P0.6 | 已完成（见下文归档表） |
+| P0.7 | **已完成** |
+
+---
+
+## 2026-05-11 · P0 构建进展（归档表）
+
+| Todo | 说明 |
+|------|------|
+| **P0.1 环境前置** | Node v22.22.0、npm 11.11.0；winget 安装 Python 3.12 后本机可跑全流程 ✅ |
+| **P0.2 工程脚手架** | `pyproject.toml`、`hylyre/`、CLI、`doctor` ✅ |
+| **P0.3 自测试基础设施** | `tests/`、`contracts/`、GitHub Actions ✅ |
+| **P0.4 OpenSpec** | `openspec init --tools cursor,codex,claude` ✅ |
+| **P0.5 宪章 + change** | `openspec/project.md`、`add-mvp-skeleton` 全套 spec delta ✅ |
+| **P0.6 文档** | `README.md`、本文件 ✅ |
+
+### 下一步（P1）
+
+- 实现 `UiDriverBase` + `HypiumDriver`；`FakeUiDriver` 与 L2/L3 测试（见 `docs/plan.md` §6、§7.5）。
+
+---
+
+## 历史
+
+### 2026-05-11 · P0 构建启动（首轮记录）
+
+- **状态**：曾阻塞于无可用 `python`；同日通过 winget 解决并完成 P0.7。

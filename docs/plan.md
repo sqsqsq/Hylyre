@@ -1,22 +1,24 @@
 # Hylyre 真机测试框架设计规划
 
 > **状态**：P0 待启动
-> **来源**：本规划由 Cursor plan 模式生成，写入工作区供后续追踪。原始 plan 文件副本位于 `~/.cursor/plans/hylyre_framework_design_*.plan.md`。
-> **配套进度叙事**：见 [`progress.md`](./progress.md)（待 P0.5 创建）。
+> **SSOT**：本文件 `docs/plan.md` 是唯一编辑入口，所有 plan 迭代**只改这里**。
+> **UI 镜像**：`~/.cursor/plans/hylyre_framework_design_*.plan.md` 是 Cursor IDE 提供「执行 / 切换模型」按钮所需的同名副本，**只读、由本文件同步**；切换模型或新会话恢复 plan 时点那一份。每次 `docs/plan.md` 改动后，AI 需把全文 + frontmatter 同步到该副本（顶部带「Auto-mirrored」提示）。
+> **配套进度叙事**：见 [`progress.md`](./progress.md)（待 P0.6 创建）。
 
 ## 阶段 todos 总览
 
 - [ ] **P0.1** 环境前置：检测 Python ≥ 3.10、Node ≥ 20.19、npm；不满足则停下给修复指引
 - [ ] **P0.2** 工程脚手架：pyproject.toml + hylyre/ 包目录 + CLI typer 占位 + doctor 子命令 + cli help smoke test
 - [ ] **P0.3** OpenSpec 初始化：npm 全局装 openspec → openspec init → 校验 openspec/ 与 agent 路由文件
-- [ ] **P0.4** 项目宪章 + add-mvp-skeleton change 4 件套（proposal/design/tasks + 5 个 capability spec delta）
-- [ ] **P0.5** 进度说明书第一篇 docs/progress.md + README.md 扩写
-- [ ] **P0.6** P0 完成校验：pip install -e . / hylyre --help / hylyre doctor / pytest / openspec list 全绿
-- [ ] **P1** Hypium 内层：HypiumDriver 实现 connect/start_app/touch/input/screenshot，冻结 UiDriverBase ABC
-- [ ] **P2** Lyrebird 内层：LyrebirdController 实现 lifecycle + group activate + 数据加载 + 抓包（含证书自举）
-- [ ] **P3** 外层 HylyreAgent：Midscene 风格 ai_action / ai_query / ai_assert / ai_tap / ai_input（VLM endpoint 走环境变量）
-- [ ] **P4** ScenarioRunner + Reporter：解析 test-plan.md → 串联 UI+mock → 产 test-report.md + trace.json，先用本仓 fixtures 走通 schema 闭环
-- [ ] **P5** 薄 MCP wrapper：FastMCP 封 5-8 原子 tool，与 CLI 共享业务实现
+- [ ] **P0.4** 自测试基础设施：pytest + fakes + L4 自有 schema 占位 + L5 mini-harness 包目录 + framework 兼容性 CI（软提醒）
+- [ ] **P0.5** 项目宪章 + add-mvp-skeleton change 4 件套（proposal/design/tasks + 5 个 capability spec delta）
+- [ ] **P0.6** 进度说明书第一篇 docs/progress.md + README.md 扩写
+- [ ] **P0.7** P0 完成校验：pip install -e . / hylyre --help / hylyre doctor / pytest / openspec list 全绿
+- [ ] **P1** Hypium 内层：HypiumDriver 实现 connect/start_app/touch/input/screenshot，冻结 UiDriverBase ABC（+ L1 单测 + L2 FakeUiDriver 契约测试 + L3 集成测试覆盖率 ≥ 70%）
+- [ ] **P2** Lyrebird 内层：LyrebirdController 实现 lifecycle + group activate + 数据加载 + 抓包（含证书自举）（+ L1 单测 + L2 FakeMockController 契约测试 + L3 用 respx 拦截 HTTP，不真起 lyrebird）
+- [ ] **P3** 外层 HylyreAgent：Midscene 风格 ai_action / ai_query / ai_assert / ai_tap / ai_input（VLM endpoint 走环境变量）（+ L1 单测，VLM 调用全部 mock；agent 行为不依赖真实模型）
+- [ ] **P4** ScenarioRunner + Reporter：解析 test-plan.md → 串联 UI+mock → 产 test-report.md + trace.json（+ L4 自有 schema 全量校验 + L5 mini-harness 上线，作为 `hylyre run` 内置门禁；本仓 fixtures 即可端到端跑通）
+- [ ] **P5** 薄 MCP wrapper：FastMCP 封 5-8 原子 tool，与 CLI 共享业务实现（+ tool 描述长度 lint < 500 tokens/个；MCP 与 CLI 行为一致性 contract test）
 - [ ] **P6** 反哺 Skill 6（遗留待评审）：选 SimulatedWalletForHmos 真实 feature 做端到端回归 + 给 framework/ 提 PR
 
 ---
@@ -30,6 +32,8 @@
 - **Skill 6 集成**：Hylyre 作为执行器（与 framework 解耦）。`hylyre run --plan ... --feature ...` 产出符合 [testing-rules.yaml](https://raw.githubusercontent.com/sqsqsq/SimulatedWalletForHmos/main/framework/specs/phase-rules/testing-rules.yaml) 的 `test-report.md` 与符合 [trace.schema.json](https://raw.githubusercontent.com/sqsqsq/SimulatedWalletForHmos/main/framework/harness/trace/trace.schema.json) 的 `trace.json`。
 - **VLM 厂商 / endpoint**：P3 阶段再定，先用环境变量 `HYLYRE_VLM_ENDPOINT` / `HYLYRE_VLM_API_KEY` / `HYLYRE_VLM_MODEL` 占位，不绑厂商。
 - **P4 端到端验证 feature**：遗留问题。P0–P3 全部完成后，依据彼时 SimulatedWalletForHmos 的 `doc/features/` 实际状态再选；先用本仓 `tests/e2e/fixtures/` 下的 mock test-plan.md 跑 schema 闭环。
+- **自测试为一等公民（新增）**：Hylyre 不依赖任何外部仓做质量门禁。从 P0 起就铺设五层自测试金字塔（L1 单元 / L2 ABC 契约 + fakes / L3 集成测试 + fake sidecar / L4 自有 schema 自校验 / L5 自托管 mini-harness），与每个阶段同步生长，作为对应 OpenSpec change 的硬性退出条件。详见第 7.5 节。
+- **输出契约 SSOT 归属（新增）**：Hylyre 输出格式（`test-report.md` 章节、`trace.json` 字段）的 SSOT **在 Hylyre 仓内** `hylyre/contracts/`。L4 自校验跑这套自有 schema。另起一个**软提醒级**的兼容性 CI：拉 framework 仓的 schema 做差异对比，失败时自动在 `docs/progress.md` 添一条「framework schema drift 待评估」，**不阻塞主 CI、不阻塞发布**。Hylyre 与 framework 之间只单向输出，永不反向引用，避免循环依赖。
 
 ---
 
@@ -103,7 +107,7 @@ Hylyre/
 │           └── specs/                 # 各 spec 的 delta
 ├── docs/
 │   ├── plan.md                        # 本文件
-│   └── progress.md                    # 长期进度说明书（叙事，待 P0.5 创建）
+│   └── progress.md                    # 长期进度说明书（叙事，待 P0.6 创建）
 ├── hylyre/
 │   ├── api/                           # 外层（Midscene 风格）
 │   │   ├── agent.py
@@ -117,11 +121,28 @@ Hylyre/
 │   ├── cli/
 │   │   ├── __main__.py
 │   │   └── commands/                  # run / mock / device / report / progress / spec / doctor / mcp / ai
+│   ├── contracts/                     # 【新增】L4 SSOT：Hylyre 自有输出 schema
+│   │   ├── output-schema.json         # test-report.md / trace.json 字段约束（Hylyre 自定义）
+│   │   ├── report-sections.yaml       # test-report.md 必需章节与表格列定义
+│   │   └── README.md                  # 契约维护规则与与 framework 的关系说明
+│   ├── harness/                       # 【新增】L5 自托管 mini-harness
+│   │   ├── check_report.py            # 校验 test-report.md（章节、表格、状态值域、AC 追溯）
+│   │   ├── check_trace.py             # 校验 trace.json（jsonschema）
+│   │   └── runner.py                  # 暴露为 CLI: hylyre report verify
 │   ├── mcp/server.py                  # FastMCP 薄 wrapper
 │   └── progress/store.py              # docs/progress.md 半自动追加
-└── tests/
-    ├── unit/
-    └── e2e/                           # 真机/模拟器
+├── tests/
+│   ├── unit/                          # L1：每个模块单测
+│   ├── contract/                      # L2：ABC 契约测试 + fakes
+│   │   ├── fakes/                     # FakeUiDriver / FakeMockController / FakeVlmClient
+│   │   └── ...
+│   ├── integration/                   # L3：集成测试（fake sidecar，无真机/真 lyrebird）
+│   ├── schema/                        # L4：jsonschema 自校验（用 hylyre/contracts/）
+│   ├── compat/                        # 软提醒：与 framework schema 兼容性照镜
+│   └── e2e/                           # 真机/模拟器（CI 默认跳过，需打 marker）
+└── .github/workflows/
+    ├── ci.yml                         # L1+L2+L3+L4 必跑
+    └── compat-framework.yml           # 软提醒：拉 framework schema 比对，失败仅 warning + progress.md 追加
 ```
 
 `docs/progress.md` 与 `openspec/changes/` 并存：前者人类叙事时间线（决策、踩坑），后者机器可读规约 delta（面向 AI），互不重复。
@@ -188,6 +209,12 @@ hylyre ai assert "弹出充值成功 Toast"
 # 进度 / OpenSpec 联动
 hylyre progress show
 hylyre spec list
+
+# 自校验门禁（L5 mini-harness）— 既给 hylyre run 内置调用，也可独立使用
+hylyre report verify \
+  --report doc/features/wallet-recharge/test-report.md \
+  --trace framework/harness/reports/wallet-recharge/testing/trace.json \
+  --plan doc/features/wallet-recharge/test-plan.md
 ```
 
 ### 3.3 MCP wrapper（按需启动）
@@ -238,18 +265,22 @@ OpenSpec 规范每个变更含 4 个产物：
 
 ---
 
-## 5. Skill 6 真机测试集成合约
+## 5. Skill 6 真机测试集成合约（单向输出，不反向依赖）
 
-Hylyre 的「正确性」由能否端到端通过 Skill 6 现有 `framework/harness/scripts/check-testing.ts` 与 verifier 子 agent 度量。
+Hylyre 的「正确性」由 **Hylyre 自有的 L4+L5 自测试** 保证（详见 7.5 节），**不依赖** framework 仓 / Skill 6 在线可用。framework 是 Hylyre 输出的下游消费者，双方约定通过「契约镜像比对」保持兼容（软提醒级 CI）。
 
-### 5.1 输入合约
+### 5.1 输入合约（参考性约束）
 
-读 `doc/features/<feature>/test-plan.md` 第三章「测试用例清单」表格（列：用例编号 / 用例名称 / 前置条件 / 测试步骤 / 预期结果 / 优先级 / 关联 AC），按行解析为 `TestCase` 对象。**不创造列**，只消费 Skill 6 已固化 schema。
+读 `doc/features/<feature>/test-plan.md` 第三章「测试用例清单」表格（列：用例编号 / 用例名称 / 前置条件 / 测试步骤 / 预期结果 / 优先级 / 关联 AC），按行解析为 `TestCase` 对象。表格 schema 由 `hylyre/contracts/report-sections.yaml` **在 Hylyre 仓内独立声明**；初始版本与 Skill 6 模板一致，后续以本仓为 SSOT。
 
-### 5.2 输出合约
+### 5.2 输出合约（Hylyre 仓 SSOT）
+
+输出格式由 `hylyre/contracts/output-schema.json` 与 `hylyre/contracts/report-sections.yaml` 定义：
 
 - **test-report.md** 必须含 `测试概览 / 测试执行结果（表格，状态 ∈ {通过,失败,阻塞,跳过}）/ 缺陷清单 / 通过率统计（P0/P1/P2 各通过率 + 总体）/ 结论（达标 | 有条件达标 | 不达标）`
-- **trace.json** 严格符合 trace.schema.json：`phase = "testing"`、`outcome ∈ {success, partial, failed, aborted}`、`tool_calls` / `retries` / `harness_checks` / `artifacts` 由 Hylyre 运行时自动记录、`model_backend` 由 host 注入（CLI 接受 `--model-backend`）
+- **trace.json** 必须满足：`phase = "testing"`、`outcome ∈ {success, partial, failed, aborted}`、`tool_calls` / `retries` / `artifacts` 由 Hylyre 运行时自动记录、`model_backend` 由 host 注入（CLI 接受 `--model-backend`）
+
+framework 仓的 `trace.schema.json` 与 `testing-rules.yaml` 当前是兼容的事实标准，但 **不是 Hylyre 的 SSOT**。CI `compat-framework.yml` 拉 framework schema 做一次差异断言，发现漂移**只**在 `docs/progress.md` 自动追加一条「framework schema drift 待评估」，**不阻塞主 CI / 不阻塞发布**——是否调整 Hylyre SSOT 由人评估后决定。
 
 ### 5.3 调用方式
 
@@ -275,15 +306,15 @@ cd framework/harness && npx ts-node harness-runner.ts \
 
 ## 6. 分阶段路线图
 
-- **P0 · 骨架（含 openspec init，硬性）** — pyproject.toml、`hylyre` 包导入可用、**`openspec init` 跑完且 `openspec/` 目录与 agent 路由文件全部生成**、`hylyre --help` 输出、`hylyre doctor` 子命令检查 Python/Node/hdc/mitmproxy 环境 → change `add-mvp-skeleton`
-- **P1 · Hypium 内层** — HypiumDriver 实现 connect/start_app/touch/input/screenshot；UiDriverBase ABC 冻结；`hylyre device list/install`、`hylyre ai tap/input` 真机跑通 → change `add-driver-hypium`
-- **P2 · Lyrebird 内层** — LyrebirdController：lifecycle + group activate + 数据加载 + 抓包；`hylyre mock start/activate/capture` 可用 → change `add-driver-lyrebird`（含子项 `add-cert-bootstrap`）
-- **P3 · 外层 Agent + AI 动词** — `ai_action / ai_query / ai_assert`（含 VLM，参考 Midscene 纯视觉路线；endpoint 走 `HYLYRE_VLM_*` 环境变量，不绑厂商）→ change `add-api-agent`
-- **P4 · ScenarioRunner + Reporter** — 解析 test-plan.md → 串联 UI + mock → 出 test-report.md + trace.json；先用本仓 `tests/e2e/fixtures/mock-test-plan.md` 跑通 schema 闭环（不依赖外部钱包工程），保证 framework `check-testing.ts` 模拟运行通过 → change `add-scenario-runner`
-- **P5 · MCP wrapper** — FastMCP 封 5–8 原子 tool；与 CLI 共享业务实现 → change `add-mcp-wrapper`
-- **P6 · 反哺 Skill 6（遗留待评审）** — 等 P0–P5 完成后回头看：① 选 SimulatedWalletForHmos 中的一个真实 feature 做端到端真机回归；② 给 framework/ 提 PR 让 Skill 6 SKILL.md Step 5 标注「优先用 Hylyre 自动化」（在 framework repo 而非本 repo）
+每个阶段退出标准：对应 OpenSpec change 的 `tasks.md` 全勾选 + `/opsx:archive` 完成 + **本阶段对应的自测试层（见 7.5）全部纳入并通过**。
 
-每个阶段退出标准：对应 OpenSpec change 的 `tasks.md` 全勾选 + `/opsx:archive` 完成。
+- **P0 · 骨架（含 openspec init + 自测试基础设施，硬性）** — pyproject.toml、`hylyre` 包导入可用、**`openspec init` 跑完且 `openspec/` 目录与 agent 路由文件全部生成**、`hylyre --help` 输出、`hylyre doctor` 子命令检查 Python/Node/hdc/mitmproxy 环境、**pytest 跑通空骨架 + L4 schema 占位文件就位 + L5 mini-harness 包目录创建 + `compat-framework.yml` workflow 文件就绪** → change `add-mvp-skeleton`
+- **P1 · Hypium 内层** — HypiumDriver 实现 connect/start_app/touch/input/screenshot；UiDriverBase ABC 冻结；`hylyre device list/install`、`hylyre ai tap/input` 真机跑通 — **配套**：L1 driver 单测 + L2 `FakeUiDriver` 契约测试 + L3 集成测试覆盖率 ≥ 70% → change `add-driver-hypium`
+- **P2 · Lyrebird 内层** — LyrebirdController：lifecycle + group activate + 数据加载 + 抓包；`hylyre mock start/activate/capture` 可用 — **配套**：L1 单测 + L2 `FakeMockController` 契约测试 + L3 用 [`respx`](https://github.com/lundberg/respx) 拦截 HTTP，CI 不真起 lyrebird 进程 → change `add-driver-lyrebird`（含子项 `add-cert-bootstrap`）
+- **P3 · 外层 Agent + AI 动词** — `ai_action / ai_query / ai_assert`（含 VLM，参考 Midscene 纯视觉路线；endpoint 走 `HYLYRE_VLM_*` 环境变量，不绑厂商）— **配套**：L1 单测全部 mock VLM 调用，agent 行为不依赖真实模型；`FakeVlmClient` 录制回放 → change `add-api-agent`
+- **P4 · ScenarioRunner + Reporter + L5 mini-harness 上线** — 解析 test-plan.md → 串联 UI + mock → 出 test-report.md + trace.json；**L4 自有 schema 全量校验**；**L5 `hylyre report verify` 实现**并作为 `hylyre run` 的内置最后一步（自我门禁）；本仓 `tests/e2e/fixtures/mock-test-plan.md` 端到端跑通完整闭环，**完全不需要 framework 仓在线** → change `add-scenario-runner`
+- **P5 · MCP wrapper** — FastMCP 封 5–8 原子 tool；与 CLI 共享业务实现 — **配套**：tool 描述长度 lint < 500 tokens / 个；MCP 与 CLI 行为一致性 contract test（同一动作两条路径产物等价） → change `add-mcp-wrapper`
+- **P6 · 反哺 Skill 6（遗留待评审）** — 等 P0–P5 完成后回头看：① 选 SimulatedWalletForHmos 中的一个真实 feature 做端到端真机回归；② 给 framework/ 提 PR 让 Skill 6 SKILL.md Step 5 标注「优先用 Hylyre 自动化」（在 framework repo 而非本 repo）
 
 ---
 
@@ -294,6 +325,39 @@ cd framework/harness && npx ts-node harness-runner.ts \
 - **AI 动词需 VLM；本地无模型时退化** → 默认走结构化 API（`ai_tap(by_id=...)`），仅显式传 `instruction=...` 才调 VLM；endpoint 走环境变量、不绑厂商
 - **MCP schema 膨胀回到老问题** → 强制 ≤ 8 tool，每个描述 < 500 tokens；CI 加 token 计数 lint
 - **OpenSpec 与 Skill 6 framework SDD 双源** → 明确分工：OpenSpec 管「Hylyre 自身」spec；framework 管「使用 Hylyre 的业务工程」spec；互不干涉
+- **framework 仓 schema 漂移导致 Skill 6 接不上**（新增） → `compat-framework.yml` 软提醒 CI 持续监测；漂移时自动写 `docs/progress.md`，由人决定是否调整 Hylyre SSOT；**绝不**让 framework 漂移阻塞 Hylyre 主线交付
+
+---
+
+## 7.5 自测试金字塔（五层，与 P0–P5 同步生长）
+
+> **核心原则**：Hylyre 的质量门禁完全自治，离线 CI 也能通过；framework 是消费方，不是依赖方。
+
+| 层 | 名称 | 范围 | 工具 | 起步阶段 | CI 行为 |
+|---|---|---|---|---|---|
+| L1 | 单元测试 | 每个模块函数 | `pytest`、`pytest-cov` | P0 起空骨架，P1+ 实质 | 必跑、阻塞 |
+| L2 | ABC 契约测试 | `UiDriverBase` / `MockControllerBase` / `VlmClientBase` 配 fakes | `pytest` + `tests/contract/fakes/` | P1 起 | 必跑、阻塞 |
+| L3 | 集成测试（fake sidecar） | 外层串内层，但内层用 fake；HTTP 用 `respx` 拦截 | `pytest` + `respx` + 内置 fakes | P1 起 | 必跑、阻塞 |
+| L4 | 自有 schema 自校验 | `hylyre/contracts/output-schema.json` + `report-sections.yaml` 校验 Hylyre 自己的输出 | `jsonschema` + 自写 markdown lint | P0 占位、P4 全量 | 必跑、阻塞 |
+| L5 | 自托管 mini-harness | 模拟 Skill 6 的 `check-testing.ts` 关键检查（章节、表格、状态值域、AC 追溯、计划-报告一致性） | `hylyre/harness/`（暴露 `hylyre report verify`） | P0 包目录、P4 实质 | 必跑、阻塞；**也作为 `hylyre run` 内置门禁** |
+| -- | 兼容性照镜（不算正式层） | 与 framework 仓 schema 比对 | `compat-framework.yml` | P0 workflow 文件就绪、P4 启用 | **软提醒，不阻塞**；失败自动写 progress.md |
+
+**fakes 清单**（`tests/contract/fakes/`）：
+
+- `FakeUiDriver`：实现 `UiDriverBase`，内存里维护页面树与点击事件；用于 P3+ 外层测试不依赖真机
+- `FakeMockController`：实现 `MockControllerBase`，内存里维护 mock group / 录制请求；不起进程
+- `FakeVlmClient`：录制回放模式；P3 起所有 ai_* 单测都用它，禁止 CI 调真实模型
+- `FakeHdcShell`：模拟 hdc 命令输出；用于 doctor / device 子命令测试
+
+**L5 mini-harness 检查项（最小集合，P4 落地）**：
+
+- 报告必需章节：测试概览 / 测试执行结果 / 缺陷清单（如有失败） / 通过率统计 / 结论
+- 执行结果表格：状态值 ∈ {通过,失败,阻塞,跳过}
+- 通过率统计：含 P0/P1/P2 各通过率 + 总体
+- 结论判定：达标 / 有条件达标 / 不达标，且与通过率数据一致
+- 计划-报告一致性：报告中所有用例编号必须在计划中存在
+- AC 追溯：报告中每条用例必须有非空「关联 AC」字段
+- trace.json：通过 `output-schema.json` jsonschema 校验
 
 ---
 
@@ -306,47 +370,60 @@ cd framework/harness && npx ts-node harness-runner.ts \
 1. 检测 Python ≥ 3.10、Node ≥ 20.19、npm 可用
 2. 任何一项不满足：**停下，给出清晰修复指引**（链接到官方安装页），不继续后面步骤——不允许「半骨架」状态
 
-### 8.2 工程脚手架（5 个文件）
+### 8.2 工程脚手架
 
 3. `pyproject.toml`：包名 `hylyre`、CLI entrypoint `hylyre = "hylyre.cli.__main__:app"`、依赖分组：
+   - 主依赖：`typer`、`pydantic`、`httpx`、`rich`、`jsonschema`、`pyyaml`
    - `[project.optional-dependencies] device = ["hypium"]`
    - `[project.optional-dependencies] mock = ["lyrebird"]`
    - `[project.optional-dependencies] mcp = ["fastmcp>=2"]`
-   - 主依赖：`typer`、`pydantic`、`httpx`、`rich`
-4. `hylyre/` 包目录：`__init__.py` + `api/`、`drivers/base/`、`drivers/hypium/`、`drivers/lyrebird/`、`cli/commands/`、`mcp/`、`progress/` 各自 `__init__.py`
-5. `hylyre/cli/__main__.py`：typer App，注册 `run / mock / device / report / progress / spec / doctor / mcp / ai` 子命令的占位（每个子命令仅打印 "not implemented in P0"，但 `--help` 必须有内容）
-6. `hylyre/cli/commands/doctor.py`：实现完整逻辑（检查 Python/Node/npm/hdc/mitmproxy 是否就绪；这是 P0 唯一需要真实实现的子命令）
-7. `tests/unit/test_cli_help.py`：smoke test，`hylyre --help`、各子命令 `--help` 退出码必须为 0
+   - `[project.optional-dependencies] dev = ["pytest", "pytest-cov", "respx"]`
+4. `hylyre/` 包目录：`__init__.py` + `api/`、`drivers/base/`、`drivers/hypium/`、`drivers/lyrebird/`、`cli/commands/`、`contracts/`、`harness/`、`mcp/`、`progress/` 各自 `__init__.py`
+5. `hylyre/cli/__main__.py`：typer App，注册 `run / mock / device / report / progress / spec / doctor / mcp / ai` 子命令的占位（每个子命令仅打印 "not implemented in P0"，但 `--help` 必须有内容）；`report` 下挂 `verify` 子子命令的占位（P4 实现）
+6. `hylyre/cli/commands/doctor.py`：实现完整逻辑（检查 Python/Node/npm/hdc/mitmproxy 是否就绪；这是 P0 唯一需要真实实现的业务子命令）
 
-### 8.3 OpenSpec 初始化（硬性）
+### 8.3 自测试基础设施（新增，硬性）
 
-8. `npm install -g @fission-ai/openspec@latest`
-9. `cd <Hylyre 根> && openspec init`，按提示选 agent（默认全选 Cursor + Claude Code + Codex 三家路由）
-10. 校验：`openspec/project.md`、`openspec/specs/`、`openspec/changes/` 目录存在；agent 路由文件（`.cursor/rules/openspec.mdc` 等）存在
+7. `tests/` 子目录骨架：`unit/`、`contract/fakes/`、`integration/`、`schema/`、`compat/`、`e2e/`，每个目录建空 `__init__.py` + 一篇 README.md 说明该层的范围与跑法
+8. `tests/unit/test_cli_help.py`：L1 smoke test，`hylyre --help` 与各子命令 `--help` 退出码必须为 0
+9. `tests/schema/test_contracts_loadable.py`：L4 占位测试，验证 `hylyre/contracts/output-schema.json` 与 `report-sections.yaml` 文件存在且能被 `jsonschema` / `pyyaml` 解析（schema 内容可先放最小骨架，P4 充实）
+10. `hylyre/contracts/output-schema.json`：先放最小骨架（trace.json 顶层字段：`schema_version` / `feature` / `phase` / `outcome`），后续 P4 扩
+11. `hylyre/contracts/report-sections.yaml`：先放最小骨架（必需章节列表 + 状态值域），P4 扩
+12. `hylyre/contracts/README.md`：说明本目录是 SSOT，与 framework 关系、修改流程
+13. `hylyre/harness/__init__.py` + `runner.py`：占位，导出 `verify_report(report, trace, plan)` 函数签名（P4 实现）
+14. `.github/workflows/ci.yml`：跑 L1+L4 占位测试（P0 阶段 L2/L3/L5 还没东西可跑）
+15. `.github/workflows/compat-framework.yml`：占位 workflow，schedule + manual 触发；脚本仅 echo "compat check placeholder"，P4 起跑真实比对
 
-### 8.4 项目宪章 + 第一个 change
+### 8.4 OpenSpec 初始化（硬性）
 
-11. 改写 `openspec/project.md`：填项目愿景（双层架构、CLI 优先 + 薄 MCP、面向 Skill 6 的执行器定位、Midscene 风格 API、Hypium + Lyrebird 内层）
-12. 创建 `openspec/changes/add-mvp-skeleton/` 4 件套：
+16. `npm install -g @fission-ai/openspec@latest`
+17. `cd <Hylyre 根> && openspec init`，按提示选 agent（默认全选 Cursor + Claude Code + Codex 三家路由）
+18. 校验：`openspec/project.md`、`openspec/specs/`、`openspec/changes/` 目录存在；agent 路由文件（`.cursor/rules/openspec.mdc` 等）存在
+
+### 8.5 项目宪章 + 第一个 change
+
+19. 改写 `openspec/project.md`：填项目愿景（双层架构、CLI 优先 + 薄 MCP、面向 Skill 6 的执行器定位、Midscene 风格 API、Hypium + Lyrebird 内层、**自测试五层金字塔为质量底座**）
+20. 创建 `openspec/changes/add-mvp-skeleton/` 4 件套：
     - `proposal.md`：动机 = 给 HarmonyOS 真机测试提供「执行器 + mock」的 AI 友好工具链
-    - `design.md`：本计划的浓缩版（语言、形态、双层架构、Skill 6 合约）
-    - `tasks.md`：把 8.1–8.7 全部步骤作为勾选项落盘
-    - `specs/api-agent/spec.md`、`specs/cli/spec.md`、`specs/driver-hypium/spec.md`、`specs/driver-lyrebird/spec.md`、`specs/mcp-wrapper/spec.md`：各 capability 的初版 Requirement + Scenario（用 OpenSpec 的 `+`/`-` delta 语法）
+    - `design.md`：本计划的浓缩版（语言、形态、双层架构、Skill 6 合约、自测试金字塔）
+    - `tasks.md`：把 8.1–8.8 全部步骤作为勾选项落盘
+    - `specs/api-agent/spec.md`、`specs/cli/spec.md`、`specs/driver-hypium/spec.md`、`specs/driver-lyrebird/spec.md`、`specs/mcp-wrapper/spec.md`、`specs/contracts/spec.md`（**新增**：定义 Hylyre 输出契约 SSOT）：各 capability 的初版 Requirement + Scenario（用 OpenSpec 的 `+`/`-` delta 语法）
 
-### 8.5 进度说明书第一篇
+### 8.6 进度说明书第一篇
 
-13. `docs/progress.md`：写「2026-05-XX · MVP 骨架启动」——决策摘要、完成项、下一步
+21. `docs/progress.md`：写「2026-05-XX · MVP 骨架启动」——决策摘要（含「自测试自治、不依赖 framework」）、完成项、下一步
 
-### 8.6 README 扩写
+### 8.7 README 扩写
 
-14. 改写 `README.md`：项目定位、与 Hypium / Lyrebird / Midscene / OpenSpec 的关系、与 Skill 6 的契约、当前阶段（P0）、快速开始（`pip install -e . && hylyre doctor`）
+22. 改写 `README.md`：项目定位、与 Hypium / Lyrebird / Midscene / OpenSpec 的关系、与 Skill 6 的**单向输出**契约、自测试五层金字塔、当前阶段（P0）、快速开始（`pip install -e ".[dev]" && hylyre doctor && pytest`）
 
-### 8.7 P0 完成校验（必须全绿才能进入 P1）
+### 8.8 P0 完成校验（必须全绿才能进入 P1）
 
-15. `pip install -e .` 成功
-16. `hylyre --help` 输出包含全部 9 个子命令
-17. `hylyre doctor` 输出真实环境检测结果（不依赖任何子命令实现）
-18. `pytest tests/unit/test_cli_help.py` 全绿
-19. `openspec/changes/add-mvp-skeleton/tasks.md` 中 8.1–8.6 全部勾选完成
-20. `openspec list`（OpenSpec CLI 自带命令）能列出 `add-mvp-skeleton` change
-21. git commit（仅在用户明确授权后执行）
+23. `pip install -e ".[dev]"` 成功
+24. `hylyre --help` 输出包含全部 9 个子命令；`hylyre report verify --help` 也有内容（占位）
+25. `hylyre doctor` 输出真实环境检测结果
+26. `pytest` 全绿（覆盖 `tests/unit/test_cli_help.py` + `tests/schema/test_contracts_loadable.py`）
+27. `openspec/changes/add-mvp-skeleton/tasks.md` 中 8.1–8.7 全部勾选完成
+28. `openspec list`（OpenSpec CLI 自带命令）能列出 `add-mvp-skeleton` change
+29. `.github/workflows/ci.yml` 与 `compat-framework.yml` 文件就绪（不需要 push 触发，只验证文件存在）
+30. git commit（仅在用户明确授权后执行）

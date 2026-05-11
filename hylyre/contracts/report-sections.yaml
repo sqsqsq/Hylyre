@@ -1,0 +1,20 @@
+# Hylyre test-report.md contract (P0 skeleton)
+# SSOT for required sections and enum values; P4 will add table column rules.
+
+report_required_sections:
+  - "测试概览"
+  - "测试执行结果"
+  - "缺陷清单"
+  - "通过率统计"
+  - "结论"
+
+execution_status_values:
+  - "通过"
+  - "失败"
+  - "阻塞"
+  - "跳过"
+
+verdict_values:
+  - "达标"
+  - "有条件达标"
+  - "不达标"

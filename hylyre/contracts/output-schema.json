@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hylyre.dev/contracts/trace-output-p0.json",
+  "title": "HylyreTraceP0",
+  "description": "Minimal trace.json shape for P0; expand in P4 to align with consumer harness.",
+  "type": "object",
+  "required": ["schema_version", "feature", "phase", "outcome"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "0.1-p0" },
+    "feature": { "type": "string", "minLength": 1 },
+    "phase": { "type": "string", "enum": ["testing"] },
+    "outcome": {
+      "type": "string",
+      "enum": ["success", "partial", "failed", "aborted"]
+    }
+  },
+  "additionalProperties": true
+}

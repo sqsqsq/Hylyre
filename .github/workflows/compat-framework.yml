@@ -1,0 +1,14 @@
+name: compat-framework
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * 1"
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "compat check placeholder — P4 will diff against consumer harness schemas (warn-only)."
