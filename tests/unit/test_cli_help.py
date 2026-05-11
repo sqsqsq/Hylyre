@@ -12,6 +12,13 @@ ROOT_HELP = [["--help"]]
 SUBCOMMANDS = [
     ["run", "--help"],
     ["mock", "--help"],
+    ["mock", "start", "--help"],
+    ["mock", "stop", "--help"],
+    ["mock", "status", "--help"],
+    ["mock", "activate", "--help"],
+    ["mock", "deactivate", "--help"],
+    ["mock", "capture", "--help"],
+    ["mock", "cert", "--help"],
     ["device", "--help"],
     ["device", "list", "--help"],
     ["device", "install", "--help"],
