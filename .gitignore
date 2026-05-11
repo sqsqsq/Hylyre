@@ -101,3 +101,5 @@ Thumbs.db
 *.log
 tmp/
 temp/
+# Hypium / xdevice 运行时报告目录（本机烟测会生成）
+reports/

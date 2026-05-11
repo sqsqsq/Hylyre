@@ -10,7 +10,7 @@
   - `python -m hylyre doctor` ✅（已修复：`doctor` 子命令与 `doctor` 模块同名导致的 `AttributeError`，改为 `import doctor as doctor_cmd`）
   - `python -m pytest` ✅ **15 passed**
 - **`hylyre doctor` 当前环境**：Python / Node / npm / hdc ✅；**mitmproxy** 未在 PATH（预期 P2 前可选；Lyrebird 需要时安装）。
-- **OpenSpec**：`openspec/changes/add-mvp-skeleton/tasks.md` 中 **8.8** 项 23–29 已勾选（git commit 仍待你授权）。
+- **OpenSpec**：`openspec/changes/add-mvp-skeleton/tasks.md` 中 **8.8** 项已含 git commit 勾选（见仓库提交记录）。
 
 ### P0 总体状态
 
@@ -18,6 +18,16 @@
 |------|------|
 | P0.1–P0.6 | 已完成（见下文归档表） |
 | P0.7 | **已完成** |
+
+---
+
+## 2026-05-11 · P1 真机烟测（add-driver-hypium 任务 13）
+
+- **环境**：`python -m pip install -e ".[device]"`；USB 连接真机，`hdc list targets` 可见设备。
+- **命令**：
+  - `python -m hylyre device list` ✅
+  - `python -m hylyre ai tap --device-sn <SN> --x 100 --y 150` ✅（Hypium 自动推 agent / 启 uitest daemon，`touch` 正常返回）
+- **仓库**：`.gitignore` 增加 `reports/`（Hypium 默认报告目录，避免误提交）。
 
 ---
 
@@ -32,9 +42,9 @@
 | **P0.5 宪章 + change** | `openspec/project.md`、`add-mvp-skeleton` 全套 spec delta ✅ |
 | **P0.6 文档** | `README.md`、本文件 ✅ |
 
-### 下一步（P1）
+### 下一步（P1+）
 
-- 实现 `UiDriverBase` + `HypiumDriver`；`FakeUiDriver` 与 L2/L3 测试（见 `docs/plan.md` §6、§7.5）。
+- P1 驱动与 CLI 已可用；继续按 `docs/plan.md` 推进 **P2 Lyrebird** 或补 P1 边角（如 `ai input` 真机回归、selector `tap`）。
 
 ---
 

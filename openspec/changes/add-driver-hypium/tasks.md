@@ -29,4 +29,4 @@
 
 ## P1.6 Verify
 
-- [ ] 13. 真机烟测（可选，人工）：`hylyre device list`、`hylyre ai tap` 坐标模式
+- [x] 13. 真机烟测：`hylyre device list` + `hylyre ai tap --x … --y …`（2026-05-11，Windows + USB 真机，Hypium uitest/agent 自举成功）
