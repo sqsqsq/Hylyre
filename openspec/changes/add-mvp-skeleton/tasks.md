@@ -45,4 +45,4 @@
 - [x] 27. 本 `tasks.md` 8.1–8.7 勾选
 - [x] 28. `openspec list` 含 `add-mvp-skeleton`
 - [x] 29. workflow 文件已存在
-- [ ] 30. git commit（用户授权）
+- [x] 30. git commit（`49627f7`，含 `.claude` / `.codex`）
