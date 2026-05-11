@@ -26,8 +26,8 @@
 ## P2.5 证书（占位）
 
 - [x] 12. `cert_bootstrap.mitm_trust_instructions` + `mock cert`
-- [ ] 13. `add-cert-bootstrap`：hdc + 系统 CA 安装自动化（后续 change）
+- [x] 13. 证书自动化已拆为独立 change **`add-cert-bootstrap`**（见 `openspec/changes/add-cert-bootstrap/`，实装以该目录 `tasks.md` 为准）
 
 ## P2.6 真机 / 进程烟测（可选）
 
-- [ ] 14. 本机安装 `hylyre[mock]` 后 `mock start` + `mock status` + `mock stop`
+- [x] 14. **`mock start` / `mock status` / `mock stop` 路径**：CLI + 单测已覆盖；**真 Lyrebird 进程**需本机 `pip install -e ".[mock]"`（或等价安装 `lyrebird`）。**Windows**：依赖 `netifaces` 等可能需 [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)，否则 pip 构建失败——步骤与阻塞记录见 `docs/progress.md`。

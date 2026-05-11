@@ -42,13 +42,23 @@
 | **P0.5 宪章 + change** | `openspec/project.md`、`add-mvp-skeleton` 全套 spec delta ✅ |
 | **P0.6 文档** | `README.md`、本文件 ✅ |
 
-### 下一步（P1+）
+### 下一步
 
-- P1 驱动与 CLI 已可用；继续按 `docs/plan.md` 推进 **P2 Lyrebird** 或补 P1 边角（如 `ai input` 真机回归、selector `tap`）。
+- 主目标 **P3**（`HylyreAgent` + Midscene 风格 `ai_*`）；证书 hdc 自动化跟进 **`openspec/changes/add-cert-bootstrap/tasks.md`**。
 
 ---
 
-## 2026-05-11 · OpenSpec 归档（P0 / P1）
+## 2026-05-11 · P2 Lyrebird 与证书分工（闭环）
+
+- **代码交付**：`MockControllerBase` / `LyrebirdController` / `hylyre mock start|stop|status|activate|deactivate|capture|cert`；CI 内 **respx**，不强依赖真 Lyrebird 进程。
+- **OpenSpec**：
+  - `add-driver-lyrebird`：`tasks.md` 中 **13、14** 已勾选闭环说明（**13** → 独立 change **`add-cert-bootstrap`**；**14** → CLI/测已覆盖，真进程依赖本机安装）。
+  - **`add-cert-bootstrap`**：`openspec/changes/add-cert-bootstrap/` 已创建并通过 `openspec validate`（hdc + CA 安装自动化在后续 tasks 实现）。
+- **本机真进程烟测（可选）**：在仓库根执行  
+  `python -m pip install -e ".[mock]"` → `python -m hylyre mock start --mock-port 9090 --data <mock数据目录>` → `python -m hylyre mock status` → `python -m hylyre mock stop`。  
+  **Windows 注意**：`lyrebird` 依赖链可能需编译 `netifaces`，若 pip 报需 **Microsoft Visual C++ Build Tools**，先安装 [Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) 或使用已提供 wheel 的环境（如部分 Linux CI 镜像）。
+
+---
 
 - **`add-mvp-skeleton`** → `openspec/changes/archive/2026-05-11-add-mvp-skeleton/`；稳态能力写入 `openspec/specs/*`。
 - **`add-driver-hypium`** → `openspec/changes/archive/2026-05-11-add-driver-hypium/`；`driver-hypium` 等规范合并至主 specs。
