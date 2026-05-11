@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Optional
+
 import typer
 
-from hylyre.cli.commands import doctor as doctor_cmd
+from hylyre.cli.commands import ai_cmd, device as device_cmd, doctor as doctor_cmd
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -13,6 +16,12 @@ app = typer.Typer(
 )
 report_app = typer.Typer(help="Test report tools")
 app.add_typer(report_app, name="report")
+
+device_app = typer.Typer(help="Device helpers (HDC + Hypium)")
+app.add_typer(device_app, name="device")
+
+ai_app = typer.Typer(help="Structured UI actions (P1); natural language in P3")
+app.add_typer(ai_app, name="ai")
 
 
 def _p0_placeholder() -> None:
@@ -31,10 +40,24 @@ def mock() -> None:
     _p0_placeholder()
 
 
-@app.command()
-def device() -> None:
-    """Device / Hypium helpers (P1)."""
-    _p0_placeholder()
+@device_app.command("list")
+def device_list() -> None:
+    """List HarmonyOS device targets via hdc."""
+    device_cmd.run_device_list()
+
+
+@device_app.command("install")
+def device_install(
+    hap: Path = typer.Argument(..., exists=True, dir_okay=False, readable=True),
+    serial: Optional[str] = typer.Option(
+        None,
+        "--serial",
+        "-t",
+        help="Device serial (hdc -t); default first/only device.",
+    ),
+) -> None:
+    """Install a .hap onto the device via hdc."""
+    device_cmd.run_device_install(hap, serial)
 
 
 @report_app.command("verify")
@@ -71,10 +94,53 @@ def mcp_serve() -> None:
     _p0_placeholder()
 
 
-@app.command()
-def ai() -> None:
-    """Natural-language AI actions (P3)."""
-    _p0_placeholder()
+@ai_app.callback()
+def ai_callback() -> None:
+    """P1: coordinate / selector based tap and text input (requires hypium extra)."""
+
+
+@ai_app.command("tap")
+def ai_tap(
+    device_sn: Optional[str] = typer.Option(
+        None,
+        "--device-sn",
+        help="Device serial; omit to use hdc default device.",
+    ),
+    x: Optional[int] = typer.Option(None, "--x", help="Tap X (requires --y)."),
+    y: Optional[int] = typer.Option(None, "--y", help="Tap Y (requires --x)."),
+    by_text: Optional[str] = typer.Option(None, help="Tap component matching text."),
+    by_id: Optional[str] = typer.Option(None, help="Tap component matching id/key."),
+    wait_time: float = typer.Option(0.1, help="Hypium touch wait_time."),
+) -> None:
+    """Tap using coordinates or a single selector (hypium extra)."""
+    ai_cmd.run_ai_tap(
+        device_sn=device_sn,
+        x=x,
+        y=y,
+        by_text=by_text,
+        by_id=by_id,
+        wait_time=wait_time,
+    )
+
+
+@ai_app.command("input")
+def ai_input(
+    value: str = typer.Argument(..., help="Text to input."),
+    device_sn: Optional[str] = typer.Option(
+        None,
+        "--device-sn",
+        help="Device serial; omit to use hdc default device.",
+    ),
+    by_text: Optional[str] = typer.Option(None, help="Target component matching text."),
+    by_id: Optional[str] = typer.Option(None, help="Target component matching id/key."),
+) -> None:
+    """Type text into focused field or into a matched component (hypium extra)."""
+    ai_cmd.run_ai_input(
+        device_sn=device_sn,
+        value=value,
+        by_text=by_text,
+        by_id=by_id,
+    )
 
 
 def main() -> None:

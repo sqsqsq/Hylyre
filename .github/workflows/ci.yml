@@ -22,4 +22,4 @@ jobs:
       - name: CLI smoke
         run: hylyre doctor
       - name: Pytest
-        run: pytest
+        run: pytest --cov=hylyre --cov-fail-under=70

@@ -13,6 +13,8 @@ SUBCOMMANDS = [
     ["run", "--help"],
     ["mock", "--help"],
     ["device", "--help"],
+    ["device", "list", "--help"],
+    ["device", "install", "--help"],
     ["report", "--help"],
     ["report", "verify", "--help"],
     ["progress", "--help"],
@@ -21,6 +23,8 @@ SUBCOMMANDS = [
     ["mcp", "--help"],
     ["mcp", "serve", "--help"],
     ["ai", "--help"],
+    ["ai", "tap", "--help"],
+    ["ai", "input", "--help"],
 ]
 
 
