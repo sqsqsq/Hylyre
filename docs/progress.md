@@ -48,8 +48,9 @@
 
 ---
 
-## 历史
+## 2026-05-11 · OpenSpec 归档（P0 / P1）
 
-### 2026-05-11 · P0 构建启动（首轮记录）
+- **`add-mvp-skeleton`** → `openspec/changes/archive/2026-05-11-add-mvp-skeleton/`；稳态能力写入 `openspec/specs/*`。
+- **`add-driver-hypium`** → `openspec/changes/archive/2026-05-11-add-driver-hypium/`；`driver-hypium` 等规范合并至主 specs。
 
-- **状态**：曾阻塞于无可用 `python`；同日通过 winget 解决并完成 P0.7。
+---

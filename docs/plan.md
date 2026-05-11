@@ -1,20 +1,20 @@
 # Hylyre 真机测试框架设计规划
 
-> **状态**：P0 待启动
+> **状态**：**P1 已完成**；当前主目标 **P2**（Lyrebird 内层）。历史：P0 已交付。
 > **SSOT**：本文件 `docs/plan.md` 是唯一编辑入口，所有 plan 迭代**只改这里**。
 > **UI 镜像**：`~/.cursor/plans/hylyre_framework_design_*.plan.md` 是 Cursor IDE 提供「执行 / 切换模型」按钮所需的同名副本，**只读、由本文件同步**；切换模型或新会话恢复 plan 时点那一份。每次 `docs/plan.md` 改动后，AI 需把全文 + frontmatter 同步到该副本（顶部带「Auto-mirrored」提示）。
-> **配套进度叙事**：见 [`progress.md`](./progress.md)（待 P0.6 创建）。
+> **配套进度叙事**：见 [`progress.md`](./progress.md)。
 
 ## 阶段 todos 总览
 
-- [ ] **P0.1** 环境前置：检测 Python ≥ 3.10、Node ≥ 20.19、npm；不满足则停下给修复指引
-- [ ] **P0.2** 工程脚手架：pyproject.toml + hylyre/ 包目录 + CLI typer 占位 + doctor 子命令 + cli help smoke test
-- [ ] **P0.3** OpenSpec 初始化：npm 全局装 openspec → openspec init → 校验 openspec/ 与 agent 路由文件
-- [ ] **P0.4** 自测试基础设施：pytest + fakes + L4 自有 schema 占位 + L5 mini-harness 包目录 + framework 兼容性 CI（软提醒）
-- [ ] **P0.5** 项目宪章 + add-mvp-skeleton change 4 件套（proposal/design/tasks + 5 个 capability spec delta）
-- [ ] **P0.6** 进度说明书第一篇 docs/progress.md + README.md 扩写
-- [ ] **P0.7** P0 完成校验：pip install -e . / hylyre --help / hylyre doctor / pytest / openspec list 全绿
-- [ ] **P1** Hypium 内层：HypiumDriver 实现 connect/start_app/touch/input/screenshot，冻结 UiDriverBase ABC（+ L1 单测 + L2 FakeUiDriver 契约测试 + L3 集成测试覆盖率 ≥ 70%）
+- [x] **P0.1** 环境前置：检测 Python ≥ 3.10、Node ≥ 20.19、npm；不满足则停下给修复指引
+- [x] **P0.2** 工程脚手架：pyproject.toml + hylyre/ 包目录 + CLI typer 占位 + doctor 子命令 + cli help smoke test
+- [x] **P0.3** OpenSpec 初始化：npm 全局装 openspec → openspec init → 校验 openspec/ 与 agent 路由文件
+- [x] **P0.4** 自测试基础设施：pytest + fakes + L4 自有 schema 占位 + L5 mini-harness 包目录 + framework 兼容性 CI（软提醒）
+- [x] **P0.5** 项目宪章 + add-mvp-skeleton change 4 件套（proposal/design/tasks + 5 个 capability spec delta）
+- [x] **P0.6** 进度说明书第一篇 docs/progress.md + README.md 扩写
+- [x] **P0.7** P0 完成校验：pip install -e . / hylyre --help / hylyre doctor / pytest / openspec list 全绿
+- [x] **P1** Hypium 内层：HypiumDriver 实现 connect/start_app/touch/input/screenshot，冻结 UiDriverBase ABC（+ L1 单测 + L2 FakeUiDriver 契约测试 + L3 集成测试覆盖率 ≥ 70%）；OpenSpec `add-driver-hypium` 已归档
 - [ ] **P2** Lyrebird 内层：LyrebirdController 实现 lifecycle + group activate + 数据加载 + 抓包（含证书自举）（+ L1 单测 + L2 FakeMockController 契约测试 + L3 用 respx 拦截 HTTP，不真起 lyrebird）
 - [ ] **P3** 外层 HylyreAgent：Midscene 风格 ai_action / ai_query / ai_assert / ai_tap / ai_input（VLM endpoint 走环境变量）（+ L1 单测，VLM 调用全部 mock；agent 行为不依赖真实模型）
 - [ ] **P4** ScenarioRunner + Reporter：解析 test-plan.md → 串联 UI+mock → 产 test-report.md + trace.json（+ L4 自有 schema 全量校验 + L5 mini-harness 上线，作为 `hylyre run` 内置门禁；本仓 fixtures 即可端到端跑通）
