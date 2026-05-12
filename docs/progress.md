@@ -45,7 +45,7 @@
 ### 下一步
 
 - **主线**：**P6**（反哺 Skill 6）或工程卫生（如 `compat-framework`）。
-- **并行**：仓库 `scripts/bootstrap_mock.*`（可选）。
+- **并行**：仓库 **`scripts/bootstrap_mock.{sh,bat,ps1}`**（可选入口，等价 CLI）。
 
 ---
 
