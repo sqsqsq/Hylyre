@@ -8,6 +8,8 @@ from typing import Any
 
 from hylyre.scenario.runner import ScenarioRunResult, resolved_outcome
 
+_TIERS = ("P0", "P1", "P2")
+
 
 def write_run_artifacts(
     result: ScenarioRunResult,
@@ -25,6 +27,17 @@ def write_run_artifacts(
     )
 
 
+def _normalize_tier(priority: str) -> str:
+    p = priority.upper().strip()
+    if p in _TIERS:
+        return p
+    if p.startswith("P0"):
+        return "P0"
+    if p.startswith("P1"):
+        return "P1"
+    return "P2"
+
+
 def _outcome_from_result(result: ScenarioRunResult) -> str:
     return resolved_outcome(result)
 
@@ -38,13 +51,11 @@ def _verdict_from_outcome(outcome: str, pass_ratio: float) -> str:
 
 
 def _priority_counts(result: ScenarioRunResult) -> dict[str, dict[str, int]]:
-    """P0/P1/P2 buckets: total vs passed."""
-    buckets: dict[str, dict[str, int]] = {}
+    """P0/P1/P2 buckets: total vs passed (unknown priorities → P2)."""
+    buckets: dict[str, dict[str, int]] = {t: {"total": 0, "passed": 0} for t in _TIERS}
     for cr in result.case_results:
-        p = cr.case.priority.upper().strip()
-        if not p.startswith("P"):
-            p = "P?"
-        b = buckets.setdefault(p, {"total": 0, "passed": 0})
+        tier = _normalize_tier(cr.case.priority)
+        b = buckets[tier]
         b["total"] += 1
         if cr.status == "通过":
             b["passed"] += 1
@@ -91,7 +102,8 @@ def _markdown_report(result: ScenarioRunResult) -> str:
     lines.append("")
     lines.append("## 通过率统计")
     lines.append("")
-    for pr, b in sorted(buckets.items()):
+    for pr in _TIERS:
+        b = buckets[pr]
         t, ok = b["total"], b["passed"]
         pct = f"{100.0 * ok / t:.1f}%" if t else "n/a"
         lines.append(f"- **{pr}**: {ok}/{t}（{pct}）")
@@ -132,4 +144,3 @@ def _trace_object(result: ScenarioRunResult, *, model_backend: str) -> dict[str,
             for cr in result.case_results
         ],
     }
-

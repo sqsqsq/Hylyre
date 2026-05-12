@@ -16,5 +16,5 @@ The system SHALL version output shapes under `hylyre/contracts/`:
 
 - GIVEN CI runs `tests/schema/test_contracts_loadable.py`
 - WHEN contracts are present
-- THEN JSON Schema draft 2020-12 validates and YAML parses
+- THEN JSON Schema draft 2020-12 validates and YAML parses and `report-sections.yaml` includes L5 tier keys (`pass_rate_required_tiers`, `pass_rate_overall_label`)
 

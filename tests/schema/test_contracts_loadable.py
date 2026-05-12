@@ -24,3 +24,5 @@ def test_report_sections_yaml_loads() -> None:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert "report_required_sections" in data
     assert data["execution_status_values"]
+    assert data.get("pass_rate_required_tiers") == ["P0", "P1", "P2"]
+    assert data.get("pass_rate_overall_label") == "总体"

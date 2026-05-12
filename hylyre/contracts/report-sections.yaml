@@ -1,5 +1,5 @@
-# Hylyre test-report.md contract (P0 skeleton)
-# SSOT for required sections and enum values; P4 will add table column rules.
+# Hylyre test-report.md contract (L4/L5 SSOT)
+# L5 harness enforces headings, execution status, pass-rate tiers, verdict, plan↔report, trace.
 
 report_required_sections:
   - "测试概览"
@@ -18,3 +18,11 @@ verdict_values:
   - "达标"
   - "有条件达标"
   - "不达标"
+
+# 通过率统计小节必须出现的分级（与 §7.5 一致）；非 P0/P1/P2 的优先级在 emit 中并入 P2 统计
+pass_rate_required_tiers:
+  - "P0"
+  - "P1"
+  - "P2"
+
+pass_rate_overall_label: "总体"
