@@ -38,7 +38,8 @@ openspec list
 2. **mitmproxy**：代理链路需要，PATH 中能运行 `mitmproxy` 或 `mitmdump`；安装见 <https://mitmproxy.org/>
 3. **Windows**：按 Lyrebird 文档准备 **预编译 OpenSSL**，并配置环境变量 **`LIB`**、**`INCLUDE`** 指向对应目录；若 `pip` 编译 `netifaces` 等失败，需安装 **Microsoft C++ Build Tools**
 4. **Docker（可选）**：可用镜像 `overbridge/lyrebird` 跑 Lyrebird，把管理 API 暴露到本机端口后，设置环境变量 **`HYLYRE_LYREBIRD_URL`**（例如 `http://127.0.0.1:9090`），即可在不使用 `hylyre mock start` 子进程的情况下对接
-5. **VLM（P3，`hylyre ai action|query|assert`）**：需配置 **`HYLYRE_VLM_ENDPOINT`**（OpenAI 兼容 `…/v1/chat/completions`）、可选 **`HYLYRE_VLM_API_KEY`**、**`HYLYRE_VLM_MODEL`**；未配置时自然语言子命令会报错退出
+5. **VLM（P3，`hylyre ai action|query|assert`）**：需配置 **`HYLYRE_VLM_ENDPOINT`**（OpenAI 兼容 `…/v1/chat/completions`；DeepSeek 官方示例为 `https://api.deepseek.com/chat/completions`）、可选 **`HYLYRE_VLM_API_KEY`**、**`HYLYRE_VLM_MODEL`**；未配置时自然语言子命令会报错退出
+6. **外部规划器（无 VLM）**：可不设 `HYLYRE_VLM_*`，由调用方对 `agent.ui.screenshot()` 等做理解与 JSON 规划，再通过 **`HylyreAgent.run_planned_action` / `run_planned_tap` / `run_planned_input`** 执行与内置 VLM 同形的 payload；查询 / 断言结果可用 **`interpret_query_payload`**、**`interpret_assert_payload`** 做与 `ai_query` / `ai_assert` 一致的解析
 
 ## 当前阶段
 

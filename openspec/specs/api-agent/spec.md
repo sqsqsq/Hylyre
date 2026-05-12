@@ -8,7 +8,7 @@ Midscene 风格的 `HylyreAgent` 外层 API（`ai_*` 动词），与具体 UI/Mo
 
 ### Requirement: HylyreAgent public surface
 
-The system SHALL expose `HylyreAgent` from `hylyre.api` (and `hylyre` package root) with Midscene-aligned methods: `ai_action`, `ai_query`, `ai_assert`, `ai_tap`, `ai_input`, `ai_wait_for`, `ai_locate`, plus `start_app`, `aclose`, and optional `mock_activate_group` / `mock_deactivate_all` when a `MockControllerBase` is configured.
+The system SHALL expose `HylyreAgent` from `hylyre.api` (and `hylyre` package root) with Midscene-aligned methods: `ai_action`, `ai_query`, `ai_assert`, `ai_tap`, `ai_input`, `ai_wait_for`, `ai_locate`, plus `run_planned_action`, `run_planned_tap`, `run_planned_input`, static `interpret_query_payload` / `interpret_assert_payload`, `start_app`, `aclose`, and optional `mock_activate_group` / `mock_deactivate_all` when a `MockControllerBase` is configured.
 
 #### Scenario: Import path stable
 
@@ -25,6 +25,11 @@ The system SHALL expose `HylyreAgent` from `hylyre.api` (and `hylyre` package ro
 
 - **WHEN** `ai_tap(instruction=...)` (or other `ai_*` NL overloads) is used
 - **THEN** a `VlmClientBase` must be configured or a clear `ValueError` is raised
+
+#### Scenario: External planner without VLM
+
+- **WHEN** `run_planned_action`, `run_planned_tap`, or `run_planned_input` is called with a payload matching the same JSON shape as the built-in `HttpVlmClient` / `VlmClientBase` vision responses
+- **THEN** no `VlmClientBase` is required and the resulting `UiDriverBase` operations are equivalent to those performed when an integrated VLM returns the same payload for the corresponding `ai_*` path
 
 ---
 

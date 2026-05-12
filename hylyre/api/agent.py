@@ -39,8 +39,9 @@ class HylyreAgent:
     def _require_vlm(self) -> VlmClientBase:
         if self._vlm is None:
             raise ValueError(
-                "Natural-language step requires a VLM client (pass vlm= to HylyreAgent "
-                "or use structured ai_tap / ai_input with by_id/by_text/coordinates only)."
+                "Natural-language step requires a VLM client (pass vlm= to HylyreAgent, "
+                "use structured ai_tap / ai_input with by_id/by_text/coordinates only, "
+                "or run_planned_* with JSON from an external planner)."
             )
         return self._vlm
 
@@ -87,6 +88,113 @@ class HylyreAgent:
             return {"by_id": str(t["by_id"])}
         raise ValueError(f"Unsupported touch payload: {t!r}")
 
+    async def _apply_touch_block(
+        self, touch: dict[str, Any], *, wait_time: float
+    ) -> None:
+        kwargs = self._touch_from_payload(touch)
+        kwargs["wait_time"] = wait_time
+        await self._ui.touch(**kwargs)
+
+    async def _apply_input_block(
+        self,
+        block: dict[str, Any],
+        *,
+        value: str | None,
+        by_text: str | None,
+        by_id: str | None,
+    ) -> None:
+        text = value if value is not None else block.get("text")
+        if text is None:
+            raise ValueError("VLM input payload missing text and no value= provided")
+        bt = block.get("by_text", by_text)
+        bid = block.get("by_id", by_id)
+        await self._ui.input_text(str(text), by_text=bt, by_id=bid)
+
+    async def _apply_action_block(self, act: dict[str, Any]) -> None:
+        t = act.get("type")
+        if t == "touch":
+            payload = {k: act[k] for k in ("x", "y", "by_text", "by_id") if k in act}
+            kwargs = self._touch_from_payload(payload)
+            kwargs["wait_time"] = float(act.get("wait_time", 0.1))
+            await self._ui.touch(**kwargs)
+        elif t == "input":
+            txt = act.get("text")
+            if txt is None:
+                raise ValueError("action type=input requires text")
+            await self._ui.input_text(
+                str(txt),
+                by_text=act.get("by_text"),
+                by_id=act.get("by_id"),
+            )
+        else:
+            raise ValueError(f"Unsupported action type: {t!r}")
+
+    @staticmethod
+    def interpret_query_payload(
+        raw: dict[str, Any],
+        *,
+        schema: type | None = None,
+    ) -> Any:
+        """Coerce ``answer`` / ``dtype`` from a VLM-shaped query JSON (no UI)."""
+        answer = raw.get("answer")
+        dtype = str(raw.get("dtype", "string"))
+        if schema is None:
+            if dtype == "number":
+                return float(answer) if isinstance(answer, str) else answer
+            if dtype == "boolean":
+                return bool(answer)
+            return answer
+        if schema is float:
+            return float(answer)
+        if schema is int:
+            return int(answer)
+        if schema is bool:
+            return bool(answer)
+        if schema is str:
+            return str(answer)
+        return answer
+
+    @staticmethod
+    def interpret_assert_payload(raw: dict[str, Any]) -> None:
+        """Raise ``AssertionError`` unless ``ok`` is true (VLM-shaped assert JSON)."""
+        if not raw.get("ok", False):
+            raise AssertionError(str(raw.get("reason", "assertion failed")))
+
+    async def run_planned_action(self, payload: dict[str, Any]) -> None:
+        """Apply one UI step from external JSON matching ``response_schema="action"`` (no VLM)."""
+        await self._ensure_ui()
+        act = payload.get("action")
+        if not isinstance(act, dict):
+            raise ValueError(f"planned action payload missing action dict: {payload!r}")
+        await self._apply_action_block(act)
+
+    async def run_planned_tap(
+        self, payload: dict[str, Any], *, wait_time: float = 0.1
+    ) -> None:
+        """Apply one touch from external JSON matching ``response_schema="tap"`` (no VLM)."""
+        await self._ensure_ui()
+        touch = payload.get("touch")
+        if not isinstance(touch, dict):
+            raise ValueError(f"planned tap payload missing touch dict: {payload!r}")
+        await self._apply_touch_block(touch, wait_time=wait_time)
+
+    async def run_planned_input(
+        self,
+        payload: dict[str, Any],
+        *,
+        value: str | None = None,
+        by_text: str | None = None,
+        by_id: str | None = None,
+    ) -> None:
+        """Apply one input from external JSON matching ``response_schema="input"`` (no VLM)."""
+        await self._ensure_ui()
+        block = payload.get("input")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned input payload missing input dict: {payload!r}")
+        await self._apply_input_block(
+            block, value=value, by_text=by_text, by_id=by_id
+        )
+
     async def ai_tap(
         self,
         *,
@@ -117,9 +225,7 @@ class HylyreAgent:
         touch = raw.get("touch")
         if not isinstance(touch, dict):
             raise ValueError(f"VLM tap response missing touch dict: {raw!r}")
-        kwargs = self._touch_from_payload(touch)
-        kwargs["wait_time"] = wait_time
-        await self._ui.touch(**kwargs)
+        await self._apply_touch_block(touch, wait_time=wait_time)
 
     async def ai_input(
         self,
@@ -145,12 +251,9 @@ class HylyreAgent:
         block = raw.get("input")
         if not isinstance(block, dict):
             raise ValueError(f"VLM input response missing input dict: {raw!r}")
-        text = value if value is not None else block.get("text")
-        if text is None:
-            raise ValueError("VLM input payload missing text and no value= provided")
-        bt = block.get("by_text", by_text)
-        bid = block.get("by_id", by_id)
-        await self._ui.input_text(str(text), by_text=bt, by_id=bid)
+        await self._apply_input_block(
+            block, value=value, by_text=by_text, by_id=by_id
+        )
 
     async def ai_action(self, instruction: str) -> None:
         await self._ensure_ui()
@@ -164,23 +267,7 @@ class HylyreAgent:
         act = raw.get("action")
         if not isinstance(act, dict):
             raise ValueError(f"VLM action response missing action dict: {raw!r}")
-        t = act.get("type")
-        if t == "touch":
-            payload = {k: act[k] for k in ("x", "y", "by_text", "by_id") if k in act}
-            kwargs = self._touch_from_payload(payload)
-            kwargs["wait_time"] = float(act.get("wait_time", 0.1))
-            await self._ui.touch(**kwargs)
-        elif t == "input":
-            txt = act.get("text")
-            if txt is None:
-                raise ValueError("action type=input requires text")
-            await self._ui.input_text(
-                str(txt),
-                by_text=act.get("by_text"),
-                by_id=act.get("by_id"),
-            )
-        else:
-            raise ValueError(f"Unsupported action type: {t!r}")
+        await self._apply_action_block(act)
 
     async def ai_query(
         self,
@@ -196,23 +283,7 @@ class HylyreAgent:
             screenshot_png=png,
             response_schema="query",
         )
-        answer = raw.get("answer")
-        dtype = str(raw.get("dtype", "string"))
-        if schema is None:
-            if dtype == "number":
-                return float(answer) if isinstance(answer, str) else answer
-            if dtype == "boolean":
-                return bool(answer)
-            return answer
-        if schema is float:
-            return float(answer)
-        if schema is int:
-            return int(answer)
-        if schema is bool:
-            return bool(answer)
-        if schema is str:
-            return str(answer)
-        return answer
+        return self.interpret_query_payload(raw, schema=schema)
 
     async def ai_assert(self, instruction: str) -> None:
         await self._ensure_ui()
@@ -223,8 +294,7 @@ class HylyreAgent:
             screenshot_png=png,
             response_schema="assert",
         )
-        if not raw.get("ok", False):
-            raise AssertionError(str(raw.get("reason", "assertion failed")))
+        self.interpret_assert_payload(raw)
 
     async def ai_wait_for(
         self,

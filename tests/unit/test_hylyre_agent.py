@@ -192,3 +192,70 @@ async def test_import_hylyre_package_exports_agent() -> None:
     import hylyre
 
     assert hylyre.HylyreAgent is HylyreAgent
+
+
+@pytest.mark.asyncio
+async def test_run_planned_action_touch_without_vlm() -> None:
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    try:
+        await ag.run_planned_action({"action": {"type": "touch", "by_id": "btn_login"}})
+    finally:
+        await ag.aclose()
+    touches = [e for e in ui.events if e[0] == "touch"]
+    assert touches[-1][1]["by_id"] == "btn_login"
+
+
+@pytest.mark.asyncio
+async def test_run_planned_action_input_without_vlm() -> None:
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    try:
+        await ag.run_planned_action(
+            {"action": {"type": "input", "text": "pwd", "by_id": "p"}},
+        )
+    finally:
+        await ag.aclose()
+    ins = [e for e in ui.events if e[0] == "input_text"]
+    assert ins[-1][1]["text"] == "pwd"
+
+
+@pytest.mark.asyncio
+async def test_run_planned_tap_without_vlm() -> None:
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    try:
+        await ag.run_planned_tap({"touch": {"x": 10, "y": 20}})
+    finally:
+        await ag.aclose()
+    assert any(e[0] == "touch" and e[1].get("x") == 10 for e in ui.events)
+
+
+@pytest.mark.asyncio
+async def test_run_planned_input_without_vlm() -> None:
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    try:
+        await ag.run_planned_input({"input": {"text": "hi", "by_id": "f", "by_text": None}})
+    finally:
+        await ag.aclose()
+    ins = [e for e in ui.events if e[0] == "input_text"]
+    assert ins[-1][1]["text"] == "hi"
+    assert ins[-1][1]["by_id"] == "f"
+
+
+def test_interpret_query_payload_schema_float() -> None:
+    v = HylyreAgent.interpret_query_payload(
+        {"answer": "3.14", "dtype": "number"},
+        schema=float,
+    )
+    assert v == 3.14
+
+
+def test_interpret_assert_payload_ok() -> None:
+    HylyreAgent.interpret_assert_payload({"ok": True, "reason": ""})
+
+
+def test_interpret_assert_payload_fails() -> None:
+    with pytest.raises(AssertionError, match="missing"):
+        HylyreAgent.interpret_assert_payload({"ok": False, "reason": "missing"})
