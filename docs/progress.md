@@ -52,7 +52,7 @@
 
 ## 2026-05-12 · MITM CA push + mock bootstrap（首版）
 
-- **交付**：`hdc_cli.file_send`、`cert_bootstrap.push_mitm_ca_to_device`、`hylyre mock push-ca`、`doctor` 的 **mitmproxy CA (PEM)** 行、`hylyre bootstrap mock [--install]`（P2b）。
+- **交付**：`hdc_cli.file_send`、`cert_bootstrap.push_mitm_ca_to_device`、`hylyre mock push-ca`、`doctor` 的 **mitmproxy CA (PEM)** 行、`hylyre bootstrap mock [--install]`（P2b）；仓库脚本 **`scripts/bootstrap_mock.{sh,bat,ps1}`**（`PYTHONPATH`= 仓库根，转发 CLI）。
 - **OpenSpec**：稳态 `openspec/specs/cert-bootstrap/spec.md`；change 已归档 `openspec/changes/archive/2026-05-12-add-cert-bootstrap/`（真机烟测任务 6 仍可选）。
 - **验证**：`tests/unit/test_cert_bootstrap.py`、`test_hdc_cli.py`、`test_mock_cli.py`、`test_bootstrap_cli.py`；全量 pytest **145 passed**。
 
