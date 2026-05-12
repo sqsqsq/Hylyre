@@ -72,7 +72,7 @@ class UiDriverBase(ABC):
 
     @abstractmethod
     async def screenshot(self) -> bytes:
-        """PNG bytes (or another raster format) for screenshots."""
+        """Raster screenshot bytes (Hypium emits JPEG; fakes may use PNG)."""
         raise NotImplementedError
 
     def _validate_touch_kwargs(

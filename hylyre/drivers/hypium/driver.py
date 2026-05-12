@@ -172,7 +172,7 @@ class HypiumDriver(UiDriverBase):
     async def screenshot(self) -> bytes:
         await self._require_raw()
         raw = self._raw
-        with NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        with NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             path = Path(tmp.name)
         try:
             await _to_thread(

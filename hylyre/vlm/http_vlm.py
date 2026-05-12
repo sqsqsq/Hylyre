@@ -45,6 +45,18 @@ def _schema_instruction(response_schema: str) -> str:
     )
 
 
+def image_data_url(image_bytes: bytes) -> str:
+    """Build a data URL with a MIME type matching Hypium (often JPEG) or PNG fakes."""
+    if image_bytes.startswith(b"\xff\xd8\xff"):
+        mime = "image/jpeg"
+    elif image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        mime = "image/png"
+    else:
+        mime = "image/png"
+    b64 = base64.standard_b64encode(image_bytes).decode("ascii")
+    return f"data:{mime};base64,{b64}"
+
+
 class HttpVlmClient(VlmClientBase):
     """POST to ``HYLYRE_VLM_ENDPOINT`` (e.g. https://api.openai.com/v1/chat/completions)."""
 
@@ -79,7 +91,7 @@ class HttpVlmClient(VlmClientBase):
         screenshot_png: bytes,
         response_schema: str,
     ) -> dict[str, Any]:
-        b64 = base64.standard_b64encode(screenshot_png).decode("ascii")
+        data_url = image_data_url(screenshot_png)
         sys_msg = (
             "You are a HarmonyOS UI automation planner. "
             + _schema_instruction(response_schema)
@@ -89,7 +101,7 @@ class HttpVlmClient(VlmClientBase):
             {"type": "text", "text": instruction},
             {
                 "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64}"},
+                "image_url": {"url": data_url},
             },
         ]
         headers: dict[str, str] = {"Content-Type": "application/json"}
