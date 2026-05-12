@@ -23,3 +23,20 @@ def test_run_scenario_use_fakes_writes_artifacts(tmp_path: Path) -> None:
     assert report.is_file()
     assert trace.is_file()
     assert "测试概览" in report.read_text(encoding="utf-8")
+
+
+def test_run_scenario_use_fakes_model_backend_override(tmp_path: Path) -> None:
+    import json
+
+    report = tmp_path / "r.md"
+    trace = tmp_path / "t.json"
+    run_cmd.run_scenario(
+        plan=FIXTURE,
+        feature="cli-entry",
+        report_out=report,
+        trace_out=trace,
+        use_fakes=True,
+        model_backend="my-vendor-model",
+    )
+    data = json.loads(trace.read_text(encoding="utf-8"))
+    assert data.get("model_backend") == "my-vendor-model"

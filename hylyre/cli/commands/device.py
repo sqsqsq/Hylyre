@@ -22,8 +22,21 @@ def format_device_list_text() -> str:
     return "\n".join(lines)
 
 
-def run_device_list() -> None:
+def first_device_serial() -> str | None:
+    """First serial from ``hdc list targets``, or None if none."""
+    targets = hdc_cli.list_targets()
+    return targets[0] if targets else None
+
+
+def run_device_list(*, first_only: bool = False) -> None:
     try:
+        if first_only:
+            serial = first_device_serial()
+            if not serial:
+                console.print("[yellow]No devices reported by hdc.[/yellow]")
+                raise typer.Exit(code=1)
+            typer.echo(serial)
+            return
         targets = hdc_cli.list_targets()
     except hdc_cli.HdcNotFoundError as e:
         console.print(f"[red]{e}[/red]")

@@ -32,6 +32,13 @@ async def test_mcp_tool_inventory() -> None:
     assert names == expected
     desc_lens = [len((t.description or "")) for t in tools]
     assert max(desc_lens) < 2000
+    from hylyre.mcp.description_budget import description_within_budget
+
+    for t in tools:
+        d = t.description or ""
+        assert description_within_budget(
+            d, max_tokens=500
+        ), f"tool {t.name!r} description over ~500-token heuristic: {d!r}"
 
 
 @pytest.mark.asyncio

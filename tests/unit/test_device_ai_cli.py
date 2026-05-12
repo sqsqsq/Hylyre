@@ -20,6 +20,19 @@ def test_device_list_ok(_m: MagicMock) -> None:
     assert "DEV1" in r.stdout
 
 
+@patch("hylyre.cli.commands.device.hdc_cli.list_targets", return_value=["FIRST", "SECOND"])
+def test_device_list_first_only(_m: MagicMock) -> None:
+    r = runner.invoke(app, ["device", "list", "--first"])
+    assert r.exit_code == 0, r.stdout + r.stderr
+    assert r.stdout.strip() == "FIRST"
+
+
+@patch("hylyre.cli.commands.device.hdc_cli.list_targets", return_value=[])
+def test_device_list_first_only_no_device(_m: MagicMock) -> None:
+    r = runner.invoke(app, ["device", "list", "--first"])
+    assert r.exit_code == 1
+
+
 @patch(
     "hylyre.cli.commands.device.hdc_cli.list_targets",
     side_effect=hdc_cli.HdcNotFoundError("nohdc"),

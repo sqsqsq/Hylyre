@@ -8,7 +8,11 @@ on:
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: Placeholder
-        run: echo "compat check placeholder — P4 will diff against consumer harness schemas (warn-only)."
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Soft schema mirror vs SimulatedWalletForHmos trace.schema.json
+        run: python scripts/check_framework_schema.py

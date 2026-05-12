@@ -13,6 +13,27 @@ from hylyre.report.emit import write_run_artifacts
 from hylyre.scenario.runner import ScenarioRunResult, ScenarioRunner
 
 
+def infer_model_backend_from_env() -> str:
+    """Default trace ``model_backend`` when not overridden on CLI."""
+    return (
+        os.environ.get("HYLYRE_VLM_MODEL", "").strip()
+        or (
+            "http-vlm"
+            if os.environ.get("HYLYRE_VLM_ENDPOINT", "").strip()
+            else "none"
+        )
+    )
+
+
+def resolve_model_backend(override: str | None, *, use_fakes: bool) -> str:
+    """CLI / env resolution: explicit flag, then env inference, then ``fake`` for stub runs."""
+    if override is not None and override.strip():
+        return override.strip()
+    if use_fakes:
+        return "fake"
+    return infer_model_backend_from_env()
+
+
 def execute_scenario(
     *,
     plan: Path,
@@ -26,14 +47,18 @@ def execute_scenario(
     lyrebird_url: str | None = None,
     mock_group: str | None = None,
     skip_assert_expected: bool = False,
+    model_backend: str | None = None,
 ) -> str:
     """Run plan, write artifacts, L5 verify. Returns message; raises ValueError on verify failure."""
+    mb = resolve_model_backend(model_backend, use_fakes=use_fakes)
     if use_fakes:
         runner = ScenarioRunner(use_fakes=True)
         result = runner.run_plan_file(plan, feature=feature)
-        write_run_artifacts(result, report_path=report_out, trace_path=trace_out)
+        write_run_artifacts(
+            result, report_path=report_out, trace_path=trace_out, model_backend=mb
+        )
     else:
-        result, model_backend = asyncio.run(
+        result, _ = asyncio.run(
             _run_on_device(
                 plan=plan,
                 feature=feature,
@@ -49,7 +74,7 @@ def execute_scenario(
             result,
             report_path=report_out,
             trace_path=trace_out,
-            model_backend=model_backend,
+            model_backend=mb,
         )
     verify_report(report_out, trace_out, plan)
     return f"Wrote {report_out} and {trace_out}"
@@ -68,6 +93,7 @@ def run_scenario(
     lyrebird_url: str | None = None,
     mock_group: str | None = None,
     skip_assert_expected: bool = False,
+    model_backend: str | None = None,
 ) -> None:
     try:
         msg = execute_scenario(
@@ -82,6 +108,7 @@ def run_scenario(
             lyrebird_url=lyrebird_url,
             mock_group=mock_group,
             skip_assert_expected=skip_assert_expected,
+            model_backend=model_backend,
         )
     except ValueError as exc:
         typer.secho(f"verify_report failed: {exc}", err=True)
@@ -107,14 +134,6 @@ async def _run_on_device(
         mock_port=mock_port,
         lyrebird_base_url=lyrebird_url,
     )
-    model_backend = (
-        os.environ.get("HYLYRE_VLM_MODEL", "").strip()
-        or (
-            "http-vlm"
-            if os.environ.get("HYLYRE_VLM_ENDPOINT", "").strip()
-            else "none"
-        )
-    )
     try:
         runner = ScenarioRunner(use_fakes=False)
         result = await runner.run_plan_on_agent(
@@ -125,7 +144,7 @@ async def _run_on_device(
             mock_group=mock_group or None,
             check_expected=not skip_assert_expected,
         )
-        return result, model_backend
+        return result, infer_model_backend_from_env()
     finally:
         await agent.aclose()
 

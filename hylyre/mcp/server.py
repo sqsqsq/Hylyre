@@ -39,6 +39,7 @@ def build_mcp():  # type: ignore[no-untyped-def]
         lyrebird_url: str | None = None,
         mock_group: str | None = None,
         skip_assert_expected: bool = False,
+        model_backend: str | None = None,
     ) -> str:
         return run_cmd.execute_scenario(
             plan=Path(plan_path),
@@ -52,6 +53,7 @@ def build_mcp():  # type: ignore[no-untyped-def]
             lyrebird_url=lyrebird_url,
             mock_group=mock_group,
             skip_assert_expected=skip_assert_expected,
+            model_backend=model_backend,
         )
 
     @mcp.tool(

@@ -25,13 +25,31 @@ The system SHALL ship a `hylyre` console script registering top-level commands: 
 
 - **GIVEN** a developer runs `hylyre run --help`
 - **WHEN** P4 build is complete
-- **THEN** help lists `--use-fakes`, `--device-sn`, `--bundle`, `--mock-port`, `--lyrebird-url`, `--mock-group`, and `--skip-assert-expected`
+- **THEN** help lists `--use-fakes`, `--device-sn`, `--bundle`, `--mock-port`, `--lyrebird-url`, `--mock-group`, `--skip-assert-expected`, and `--model-backend`
+
+#### Scenario: Progress helpers
+
+- **GIVEN** a developer runs `hylyre progress --help`
+- **WHEN** the command group is present
+- **THEN** help lists `show`, `append`, and `path` subcommands for `docs/progress.md`
+
+#### Scenario: Spec list
+
+- **GIVEN** a developer runs `hylyre spec list --help` or bare `hylyre spec`
+- **WHEN** OpenSpec workspace exists
+- **THEN** `list` prints `openspec list` when the CLI is on PATH, else a directory summary under `openspec/specs` and `openspec/changes`
+
+#### Scenario: Device list first serial
+
+- **GIVEN** a developer runs `hylyre device list --help`
+- **WHEN** P1+ device commands exist
+- **THEN** help lists `--first` for scripting (`hylyre device list --first`)
 
 #### Scenario: MCP serve help
 
 - **GIVEN** a developer runs `hylyre mcp serve --help`
 - **WHEN** P5 build is complete
-- **THEN** help lists `--show-banner` and references the optional `hylyre[mcp]` dependency
+- **THEN** help lists `--show-banner`, `--transport` (stdio only), and references the optional `hylyre[mcp]` dependency
 
 #### Scenario: Bootstrap mock help
 

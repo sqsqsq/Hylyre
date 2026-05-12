@@ -13,7 +13,9 @@ from hylyre.cli.commands import (
     device as device_cmd,
     doctor as doctor_cmd,
     mock_cmd,
+    progress_cmd,
     run_cmd,
+    spec_cmd,
 )
 
 app = typer.Typer(
@@ -36,9 +38,67 @@ app.add_typer(mock_app, name="mock")
 bootstrap_app = typer.Typer(help="Optional mock toolchain bootstrap (P2b)")
 app.add_typer(bootstrap_app, name="bootstrap")
 
+progress_app = typer.Typer(help="View or append docs/progress.md")
+app.add_typer(progress_app, name="progress")
 
-def _p0_placeholder() -> None:
-    typer.echo("not implemented in P0")
+spec_app = typer.Typer(help="OpenSpec workspace helpers")
+app.add_typer(spec_app, name="spec")
+
+
+@progress_app.callback(invoke_without_command=True)
+def progress_default(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        progress_cmd.run_progress_show()
+
+
+@progress_app.command("show")
+def progress_show(
+    tail: Optional[int] = typer.Option(
+        None,
+        "--tail",
+        "-n",
+        min=1,
+        help="Print only the last N lines.",
+    ),
+) -> None:
+    """Print docs/progress.md path and contents."""
+    progress_cmd.run_progress_show(tail_lines=tail)
+
+
+@progress_app.command("append")
+def progress_append(
+    message: str = typer.Option(
+        ...,
+        "--message",
+        "-m",
+        help="Markdown body to append (new dated section).",
+    ),
+    title: Optional[str] = typer.Option(
+        None,
+        "--title",
+        help="Override default '## YYYY-MM-DD · hylyre progress' heading.",
+    ),
+) -> None:
+    """Append a section to docs/progress.md (creates file if needed)."""
+    progress_cmd.run_progress_append(message, title=title)
+
+
+@progress_app.command("path")
+def progress_path() -> None:
+    """Print resolved docs/progress.md path (for shell scripts)."""
+    progress_cmd.run_progress_path_only()
+
+
+@spec_app.callback(invoke_without_command=True)
+def spec_default(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        spec_cmd.run_spec_list()
+
+
+@spec_app.command("list")
+def spec_list() -> None:
+    """Run openspec list when installed, else print specs/ + changes/ summary."""
+    spec_cmd.run_spec_list()
 
 
 @app.command()
@@ -101,6 +161,11 @@ def run(
         "--skip-assert-expected",
         help="Do not call ai_assert on 预期结果 column (NL needs VLM).",
     ),
+    model_backend: Optional[str] = typer.Option(
+        None,
+        "--model-backend",
+        help="Value for trace.json model_backend (overrides HYLYRE_VLM_* inference).",
+    ),
 ) -> None:
     """Execute a test plan and emit report + trace (verify as gate)."""
     run_cmd.run_scenario(
@@ -115,13 +180,20 @@ def run(
         lyrebird_url=lyrebird_url,
         mock_group=mock_group,
         skip_assert_expected=skip_assert_expected,
+        model_backend=model_backend,
     )
 
 
 @device_app.command("list")
-def device_list() -> None:
+def device_list(
+    first: bool = typer.Option(
+        False,
+        "--first",
+        help="Print only the first device serial (for shell substitution); exit 1 if none.",
+    ),
+) -> None:
     """List HarmonyOS device targets via hdc."""
-    device_cmd.run_device_list()
+    device_cmd.run_device_list(first_only=first)
 
 
 @device_app.command("install")
@@ -167,18 +239,6 @@ def report_verify(
 
 
 @app.command()
-def progress() -> None:
-    """Show or append progress notes (P0+)."""
-    _p0_placeholder()
-
-
-@app.command()
-def spec() -> None:
-    """OpenSpec helpers (P0+)."""
-    _p0_placeholder()
-
-
-@app.command()
 def doctor() -> None:
     """Check Python, Node, npm, hdc, mitmproxy readiness."""
     doctor_cmd.run_doctor()
@@ -207,8 +267,19 @@ def mcp_serve(
         "--show-banner",
         help="Print FastMCP startup banner (default off for host compatibility).",
     ),
+    transport: str = typer.Option(
+        "stdio",
+        "--transport",
+        help="Transport (only stdio is supported).",
+    ),
 ) -> None:
     """Start MCP stdio server (FastMCP; requires: pip install 'hylyre[mcp]')."""
+    if transport != "stdio":
+        typer.secho(
+            f"Only --transport stdio is supported (got {transport!r}).",
+            err=True,
+        )
+        raise typer.Exit(code=2)
     try:
         from hylyre.mcp.server import serve_stdio
     except ImportError as exc:
