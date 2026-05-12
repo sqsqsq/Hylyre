@@ -10,7 +10,7 @@ import typer
 
 from hylyre.harness.runner import verify_report
 from hylyre.report.emit import write_run_artifacts
-from hylyre.scenario.runner import ScenarioRunResult
+from hylyre.scenario.runner import ScenarioRunResult, ScenarioRunner
 
 
 def run_scenario(
