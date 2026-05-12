@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
@@ -88,6 +89,28 @@ def _cmd_version(exe: str, *version_args: str) -> tuple[bool, str]:
         return False, str(e)
 
 
+def _mitmproxy_ca_file_check() -> CheckResult:
+    p = Path.home() / ".mitmproxy" / "mitmproxy-ca-cert.pem"
+    env = os.environ.get("HYLYRE_MITM_CA", "").strip()
+    if env:
+        p = Path(env).expanduser()
+    mitm_on_path = bool(shutil.which("mitmproxy") or shutil.which("mitmdump"))
+    if p.is_file():
+        return CheckResult("mitmproxy CA (PEM)", True, str(p.resolve()))
+    if not mitm_on_path:
+        return CheckResult(
+            "mitmproxy CA (PEM)",
+            True,
+            "N/A until mitmproxy on PATH — optional for plain HTTP mock",
+        )
+    return CheckResult(
+        "mitmproxy CA (PEM)",
+        False,
+        "Not found at "
+        f"{p}. Run mitmproxy once or set HYLYRE_MITM_CA; see hylyre mock push-ca",
+    )
+
+
 def gather_doctor_checks() -> list[CheckResult]:
     """Collect environment checks (shared by CLI doctor and MCP)."""
     rows: list[CheckResult] = [_python_check()]
@@ -108,6 +131,8 @@ def gather_doctor_checks() -> list[CheckResult]:
         else "Install mitmproxy: https://mitmproxy.org/ (required for Lyrebird proxy)"
     )
     rows.append(CheckResult("mitmproxy", mitm_ok, mitm_detail))
+
+    rows.append(_mitmproxy_ca_file_check())
 
     rows.append(_lyrebird_check())
     win_ssl = _windows_openssl_env_check()

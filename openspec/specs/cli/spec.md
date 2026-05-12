@@ -2,12 +2,12 @@
 
 ## Purpose
 
-`hylyre` 命令行入口（Typer）：`run` / `mock` / `device` / `report` / `ai` 等子命令与 `--help` 契约。
+`hylyre` 命令行入口（Typer）：`run` / `mock` / `device` / `report` / `bootstrap` / `ai` 等子命令与 `--help` 契约。
 
 ## Requirements
 ### Requirement: Hylyre CLI
 
-The system SHALL ship a `hylyre` console script registering top-level commands: `run`, `mock`, `device`, `report`, `progress`, `spec`, `doctor`, `mcp`, `ai`, each with working `--help`.
+The system SHALL ship a `hylyre` console script registering top-level commands: `run`, `mock`, `device`, `report`, `progress`, `spec`, `doctor`, `bootstrap`, `mcp`, `ai`, each with working `--help`.
 
 #### Scenario: Doctor runs
 
@@ -32,3 +32,9 @@ The system SHALL ship a `hylyre` console script registering top-level commands: 
 - **GIVEN** a developer runs `hylyre mcp serve --help`
 - **WHEN** P5 build is complete
 - **THEN** help lists `--show-banner` and references the optional `hylyre[mcp]` dependency
+
+#### Scenario: Bootstrap mock help
+
+- **GIVEN** a developer runs `hylyre bootstrap mock --help`
+- **WHEN** P2b command is present
+- **THEN** help lists `--install` for optional `pip install mitmproxy lyrebird`

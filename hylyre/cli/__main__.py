@@ -9,6 +9,7 @@ import typer
 
 from hylyre.cli.commands import (
     ai_cmd,
+    bootstrap_cmd,
     device as device_cmd,
     doctor as doctor_cmd,
     mock_cmd,
@@ -31,6 +32,9 @@ app.add_typer(ai_app, name="ai")
 
 mock_app = typer.Typer(help="Lyrebird mock control (P2)")
 app.add_typer(mock_app, name="mock")
+
+bootstrap_app = typer.Typer(help="Optional mock toolchain bootstrap (P2b)")
+app.add_typer(bootstrap_app, name="bootstrap")
 
 
 def _p0_placeholder() -> None:
@@ -180,6 +184,18 @@ def doctor() -> None:
     doctor_cmd.run_doctor()
 
 
+@bootstrap_app.command("mock")
+def bootstrap_mock(
+    install: bool = typer.Option(
+        False,
+        "--install",
+        help="Run pip install mitmproxy lyrebird into the current interpreter.",
+    ),
+) -> None:
+    """Install common mock dependencies and show a subset of doctor checks."""
+    bootstrap_cmd.run_bootstrap_mock(install=install)
+
+
 mcp_app = typer.Typer(help="MCP server (P5)")
 app.add_typer(mcp_app, name="mcp")
 
@@ -314,6 +330,29 @@ def mock_capture(
     mock_cmd.run_mock_capture(output=output, base_url=url, full=full)
 
 
+@mock_app.command("push-ca")
+def mock_push_ca(
+    ca_cert: Optional[Path] = typer.Option(
+        None,
+        "--ca-cert",
+        help="PEM path; default HYLYRE_MITM_CA or ~/.mitmproxy/mitmproxy-ca-cert.pem",
+    ),
+    serial: Optional[str] = typer.Option(
+        None,
+        "--serial",
+        "-t",
+        help="Device serial for hdc -t",
+    ),
+    remote: str = typer.Option(
+        "/data/local/tmp/hylyre-mitm-ca.pem",
+        "--remote",
+        help="Destination path on device",
+    ),
+) -> None:
+    """Push mitmproxy CA to device via hdc file send; then print install steps."""
+    mock_cmd.run_mock_push_ca(ca_cert=ca_cert, serial=serial, remote=remote)
+
+
 @mock_app.command("cert")
 def mock_cert(
     ca_cert: Optional[Path] = typer.Option(
@@ -328,7 +367,7 @@ def mock_cert(
         help="Optional device serial for hdc -t hints.",
     ),
 ) -> None:
-    """Print HarmonyOS MITM trust checklist (automation pending add-cert-bootstrap)."""
+    """Print HarmonyOS MITM trust checklist (see also mock push-ca)."""
     mock_cmd.run_mock_cert_instructions(ca_cert=ca_cert, serial=serial)
 
 

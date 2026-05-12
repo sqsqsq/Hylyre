@@ -17,6 +17,20 @@ def test_mock_cert_cli() -> None:
     assert "HarmonyOS" in r.stdout
 
 
+@patch("hylyre.cli.commands.mock_cmd.push_mitm_ca_to_device")
+def test_mock_push_ca_cli(mock_push: MagicMock, tmp_path) -> None:
+    pem = tmp_path / "x.pem"
+    pem.write_bytes(b"x")
+    mock_push.return_value = (pem, "/data/local/tmp/hylyre-mitm-ca.pem")
+    r = runner.invoke(
+        app,
+        ["mock", "push-ca", "--ca-cert", str(pem), "--serial", "S1"],
+    )
+    assert r.exit_code == 0, r.stdout + r.stderr
+    mock_push.assert_called_once()
+    assert "Sent" in r.stdout
+
+
 @patch("hylyre.cli.commands.mock_cmd.LyrebirdController")
 def test_mock_activate_calls_controller(mock_cls: MagicMock) -> None:
     inst = MagicMock()

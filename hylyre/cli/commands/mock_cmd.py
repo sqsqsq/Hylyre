@@ -11,7 +11,11 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from hylyre.drivers.lyrebird.cert_bootstrap import mitm_trust_instructions
+from hylyre.drivers.hypium import hdc_cli
+from hylyre.drivers.lyrebird.cert_bootstrap import (
+    mitm_trust_instructions,
+    push_mitm_ca_to_device,
+)
 from hylyre.drivers.lyrebird.controller import (
     LyrebirdController,
     require_lyrebird_distribution,
@@ -152,6 +156,33 @@ def run_mock_capture(
             await ctrl.aclose()
 
     asyncio.run(_go())
+
+
+def run_mock_push_ca(
+    ca_cert: Optional[Path],
+    serial: Optional[str],
+    remote: str,
+) -> None:
+    try:
+        local, rem = push_mitm_ca_to_device(
+            ca_cert=ca_cert, serial=serial, remote_path=remote
+        )
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=2) from e
+    except hdc_cli.HdcNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=2) from e
+    except hdc_cli.HdcError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=e.exit_code or 1) from e
+    console.print(f"[green]Sent[/green] {local} → device:{rem}")
+    text = mitm_trust_instructions(
+        hdc_serial=serial,
+        ca_cert=local,
+        device_remote_path=rem,
+    )
+    console.print(text)
 
 
 def run_mock_cert_instructions(

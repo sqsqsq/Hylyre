@@ -70,3 +70,49 @@ def install_hap(hap: Path, *, serial: str | None = None, timeout: float = 600.0)
     if proc.returncode != 0:
         msg = (proc.stderr or proc.stdout or "hdc install failed").strip()
         raise HdcError(msg, exit_code=proc.returncode)
+
+
+def file_send(
+    local: Path,
+    remote: str,
+    *,
+    serial: str | None = None,
+    timeout: float = 120.0,
+) -> None:
+    """Send a file to the device via ``hdc file send local remote``."""
+    exe = hdc_exe()
+    if not exe:
+        raise HdcNotFoundError(
+            "hdc not found on PATH; install HarmonyOS device tools and retry"
+        )
+    if not local.is_file():
+        raise FileNotFoundError(str(local))
+    cmd = [exe]
+    if serial:
+        cmd.extend(["-t", serial])
+    cmd.extend(["file", "send", str(local.resolve()), remote])
+    proc = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if proc.returncode != 0:
+        msg = (proc.stderr or proc.stdout or "hdc file send failed").strip()
+        raise HdcError(msg, exit_code=proc.returncode)
+
+
+def build_file_send_argv(
+    *,
+    hdc_bin: str,
+    local: Path,
+    remote: str,
+    serial: str | None = None,
+) -> list[str]:
+    """Build argv for ``hdc file send`` (for tests; no subprocess)."""
+    cmd = [hdc_bin]
+    if serial:
+        cmd.extend(["-t", serial])
+    cmd.extend(["file", "send", str(local.resolve()), remote])
+    return cmd

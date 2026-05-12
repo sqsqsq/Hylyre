@@ -93,3 +93,28 @@ def test_install_hap_nonzero_exit(
     with pytest.raises(hdc_cli.HdcError) as ei:
         hdc_cli.install_hap(hap)
     assert ei.value.exit_code == 7
+
+
+@patch("hylyre.drivers.hypium.hdc_cli.subprocess.run")
+@patch("hylyre.drivers.hypium.hdc_cli.shutil.which")
+def test_file_send_invokes_hdc(
+    mock_which: MagicMock, mock_run: MagicMock, tmp_path: Path
+) -> None:
+    mock_which.return_value = "/bin/hdc"
+    mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+    src = tmp_path / "c.pem"
+    src.write_bytes(b"x")
+    hdc_cli.file_send(src, "/data/local/tmp/c.pem", serial="ZZ")
+    cmd = mock_run.call_args[0][0]
+    assert cmd[:4] == ["/bin/hdc", "-t", "ZZ", "file"]
+    assert cmd[4] == "send"
+    assert cmd[6] == "/data/local/tmp/c.pem"
+
+
+@patch("hylyre.drivers.hypium.hdc_cli.shutil.which")
+def test_file_send_missing_hdc(mock_which: MagicMock, tmp_path: Path) -> None:
+    mock_which.return_value = None
+    p = tmp_path / "c.pem"
+    p.write_bytes(b"x")
+    with pytest.raises(hdc_cli.HdcNotFoundError):
+        hdc_cli.file_send(p, "/data/local/tmp/c.pem")

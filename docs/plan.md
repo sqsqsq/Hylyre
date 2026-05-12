@@ -1,6 +1,6 @@
 # Hylyre 真机测试框架设计规划
 
-> **状态**：**P5 MCP 已交付（薄 FastMCP）**：`hylyre mcp serve` 暴露 8 个原子 tool，与 CLI 共用 `execute_*` / `run_cmd` 逻辑；安装 `pip install 'hylyre[mcp]'`。**P4** `add-scenario-runner` 已归档；**L5 `report verify` 已与 §7.5 补严**。**下一主目标 P6**（反哺 Skill 6，可选）或并行债 **`add-cert-bootstrap`** / **P2b** mock bootstrap。
+> **状态**：**P5 MCP 已交付**；**并行能力**：MITM CA 首版 `hylyre mock push-ca`（`hdc file send`）+ `doctor` 的 `mitmproxy CA (PEM)` 检查；**P2b** 首版 `hylyre bootstrap mock [--install]`。**P4** 已归档；**L5** 已与 §7.5 补严。**下一主目标 P6**（反哺 Skill 6，可选）或补齐 **`openspec/changes/add-cert-bootstrap` 正式 archive**、仓库 `scripts/bootstrap_mock.*`（若仍需要）。
 > **SSOT**：本文件 `docs/plan.md` 是唯一编辑入口，所有 plan 迭代**只改这里**。
 > **UI 镜像**：`~/.cursor/plans/hylyre_framework_design_*.plan.md` 是 Cursor IDE 提供「执行 / 切换模型」按钮所需的同名副本，**只读、由本文件同步**；切换模型或新会话恢复 plan 时点那一份。每次 `docs/plan.md` 改动后，AI 需把全文 + frontmatter 同步到该副本（顶部带「Auto-mirrored」提示）。
 > **配套进度叙事**：见 [`progress.md`](./progress.md)。
@@ -18,7 +18,7 @@
 - [x] **P0.7** P0 完成校验：pip install -e . / hylyre --help / hylyre doctor / pytest / openspec list 全绿
 - [x] **P1** Hypium 内层：HypiumDriver 实现 connect/start_app/touch/input/screenshot，冻结 UiDriverBase ABC（+ L1 单测 + L2 FakeUiDriver 契约测试 + L3 集成测试覆盖率 ≥ 70%）；OpenSpec `add-driver-hypium` 已归档
 - [x] **P2** Lyrebird 内层：`LyrebirdController` + `hylyre mock *` + `FakeMockController` + respx/L1–L3；**设备 MITM 证书自动化**拆至 OpenSpec **`add-cert-bootstrap`**（与 §7 风险项一致）。细粒度勾选见 `openspec/changes/archive/2026-05-11-add-driver-lyrebird/tasks.md`（已归档）。
-- [ ] **P2b** Mock 工具链**自动化安装**：**主路径为 pip**（`pip install 'hylyre[mock]'`，同环境安装或校验 **mitmproxy**）；形态为 **`hylyre bootstrap mock`** 与/或仓库内 **`scripts/bootstrap_mock.*`**；结束后复用 **`doctor` 同源检测**。**Windows**（OpenSSL `LIB`/`INCLUDE`、MSVC）、**Docker**（`overbridge/lyrebird` + `HYLYRE_LYREBIRD_URL`）仅作**失败回退与引导**（输出可复制命令 + README 锚点），不默认静默安装系统级组件。OpenSpec change 待定（如 `add-toolchain-bootstrap-mock`）。
+- [x] **P2b** Mock 工具链**引导安装（首版）**：**`hylyre bootstrap mock`**（可选 **`--install`** → 当前解释器 `pip install mitmproxy lyrebird`）+ 与 **`doctor` 同源的 mitmproxy / lyrebird 子集表格**；仍建议本仓开发用 **`pip install -e '.[mock]'`**。仓库级 **`scripts/bootstrap_mock.*`** 若需可另开 OpenSpec change。**Windows** / **Docker** 回退仍走文档与 `doctor`，不静默装系统依赖。
 - [x] **P3** 外层 HylyreAgent：`HylyreAgent` + Midscene 风格 `ai_action` / `ai_query` / `ai_assert` / `ai_tap` / `ai_input` / `ai_wait_for` / `ai_locate`（VLM 走 `HYLYRE_VLM_*`；单测 `FakeVlmClient`）；**增量**：`run_planned_action` / `run_planned_tap` / `run_planned_input` + `interpret_query_payload` / `interpret_assert_payload`，供调用方自备模型时对 VLM 同形 JSON 落盘，无需配置 `HYLYRE_VLM_*`。OpenSpec **`add-api-agent`** 已归档至 `openspec/changes/archive/2026-05-11-add-api-agent/`（`openspec/specs/api-agent/spec.md` 已跟进该能力）。
 - [x] **P4** ScenarioRunner + Reporter：`hylyre run`（`--use-fakes` / 真机 `run_plan_on_agent`、`--bundle` / Lyrebird `--mock-group`）、JSON 或 NL 测试步骤（NL 需 `HYLYRE_VLM_*`）、`test-report.md`+`trace.json`（`0.2-p4`、`tool_calls`）、`hylyre report verify`、fixture 与 OpenSpec **`add-scenario-runner`** 已归档至 `openspec/changes/archive/2026-05-12-add-scenario-runner/`
 - [x] **P5** 薄 MCP wrapper：`hylyre mcp serve`（FastMCP stdio）、8 个原子 tool 与 CLI 同源实现、`tests/unit/test_mcp_server.py`；可选 `hylyre[mcp]`；规约 **`openspec/specs/mcp-wrapper/spec.md`**

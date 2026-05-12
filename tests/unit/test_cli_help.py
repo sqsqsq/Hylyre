@@ -19,6 +19,9 @@ SUBCOMMANDS = [
     ["mock", "deactivate", "--help"],
     ["mock", "capture", "--help"],
     ["mock", "cert", "--help"],
+    ["mock", "push-ca", "--help"],
+    ["bootstrap", "--help"],
+    ["bootstrap", "mock", "--help"],
     ["device", "--help"],
     ["device", "list", "--help"],
     ["device", "install", "--help"],
@@ -57,5 +60,5 @@ def test_main_help_lists_expected_groups() -> None:
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=False)
     assert proc.returncode == 0
     out = proc.stdout
-    for name in ("run", "mock", "device", "report", "progress", "spec", "doctor", "mcp", "ai"):
+    for name in ("run", "mock", "device", "report", "progress", "spec", "doctor", "bootstrap", "mcp", "ai"):
         assert name in out, f"missing top-level command {name!r} in:\n{out}"
