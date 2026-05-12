@@ -66,3 +66,51 @@ def test_ai_input_mocked(mock_cls: MagicMock) -> None:
     )
     assert r.exit_code == 0, r.stdout + r.stderr
     inst.input_text.assert_awaited()
+
+
+@patch("hylyre.wiring.create_hypium_agent_with_env_vlm")
+def test_ai_action_cli_uses_agent(mock_create: MagicMock) -> None:
+    from tests.contract.fakes.fake_ui_driver import FakeUiDriver
+    from tests.contract.fakes.fake_vlm_client import FakeVlmClient
+
+    ui = FakeUiDriver()
+    vlm = FakeVlmClient(
+        responses=[{"action": {"type": "touch", "x": 5, "y": 6}}],
+    )
+    from hylyre.api.agent import HylyreAgent
+
+    ag = HylyreAgent(ui=ui, vlm=vlm)
+    mock_create.return_value = ag
+    r = runner.invoke(app, ["ai", "action", "tap"])
+    assert r.exit_code == 0, r.stdout + r.stderr
+
+
+@patch("hylyre.wiring.create_hypium_agent_with_env_vlm")
+def test_ai_query_cli_prints(mock_create: MagicMock) -> None:
+    from tests.contract.fakes.fake_ui_driver import FakeUiDriver
+    from tests.contract.fakes.fake_vlm_client import FakeVlmClient
+
+    ui = FakeUiDriver()
+    vlm = FakeVlmClient(responses=[{"answer": "yes", "dtype": "string"}])
+    from hylyre.api.agent import HylyreAgent
+
+    ag = HylyreAgent(ui=ui, vlm=vlm)
+    mock_create.return_value = ag
+    r = runner.invoke(app, ["ai", "query", "visible?", "--schema", "string"])
+    assert r.exit_code == 0, r.stdout + r.stderr
+    assert "yes" in r.stdout
+
+
+@patch("hylyre.wiring.create_hypium_agent_with_env_vlm")
+def test_ai_assert_cli_ok(mock_create: MagicMock) -> None:
+    from tests.contract.fakes.fake_ui_driver import FakeUiDriver
+    from tests.contract.fakes.fake_vlm_client import FakeVlmClient
+
+    ui = FakeUiDriver()
+    vlm = FakeVlmClient(responses=[{"ok": True, "reason": ""}])
+    from hylyre.api.agent import HylyreAgent
+
+    ag = HylyreAgent(ui=ui, vlm=vlm)
+    mock_create.return_value = ag
+    r = runner.invoke(app, ["ai", "assert", "home visible"])
+    assert r.exit_code == 0, r.stdout + r.stderr

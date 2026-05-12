@@ -1,10 +1,4 @@
-# api-agent Specification
-
-## Purpose
-
-Midscene 风格的 `HylyreAgent` 外层 API（`ai_*` 动词），与具体 UI/Mock 驱动及 VLM 实现解耦；P3 实装。
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: HylyreAgent public surface
 
@@ -26,8 +20,6 @@ The system SHALL expose `HylyreAgent` from `hylyre.api` (and `hylyre` package ro
 - **WHEN** `ai_tap(instruction=...)` (or other `ai_*` NL overloads) is used
 - **THEN** a `VlmClientBase` must be configured or a clear `ValueError` is raised
 
----
-
 ### Requirement: VLM client abstraction
 
 The system SHALL provide `VlmClientBase` in `hylyre.drivers.base` and a concrete `HttpVlmClient` that reads `HYLYRE_VLM_ENDPOINT`, optional `HYLYRE_VLM_API_KEY`, `HYLYRE_VLM_MODEL`, posting OpenAI-compatible chat completions with vision.
@@ -37,8 +29,6 @@ The system SHALL provide `VlmClientBase` in `hylyre.drivers.base` and a concrete
 - **WHEN** `HYLYRE_VLM_ENDPOINT` is unset
 - **THEN** `HttpVlmClient.from_env()` returns `None`
 
----
-
 ### Requirement: Agent wiring
 
 The system SHALL provide `hylyre.wiring.create_hypium_agent` (and `create_hypium_agent_with_env_vlm`) that lazily construct `HypiumDriver` and optional `LyrebirdController` without placing those imports in `hylyre.api`.
@@ -47,8 +37,6 @@ The system SHALL provide `hylyre.wiring.create_hypium_agent` (and `create_hypium
 
 - **WHEN** `create_hypium_agent(device_sn=...)` is called
 - **THEN** `HypiumDriver` is imported inside the factory implementation (not from `hylyre.api`)
-
----
 
 ### Requirement: CLI ai natural language
 

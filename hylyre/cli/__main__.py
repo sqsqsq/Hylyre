@@ -98,7 +98,7 @@ def mcp_serve() -> None:
 
 @ai_app.callback()
 def ai_callback() -> None:
-    """P1: coordinate / selector based tap and text input (requires hypium extra)."""
+    """P1: structured tap/input. P3: natural language via HYLYRE_VLM_* + action/query/assert."""
 
 
 @mock_app.callback()
@@ -266,6 +266,54 @@ def ai_input(
         by_text=by_text,
         by_id=by_id,
     )
+
+
+@ai_app.command("action")
+def ai_action(
+    instruction: str = typer.Argument(..., help="Natural-language UI step."),
+    device_sn: Optional[str] = typer.Option(
+        None,
+        "--device-sn",
+        help="Device serial; omit to use hdc default device.",
+    ),
+) -> None:
+    """One VLM-planned action (requires HYLYRE_VLM_ENDPOINT and hypium extra)."""
+    ai_cmd.run_ai_action(device_sn=device_sn, instruction=instruction)
+
+
+@ai_app.command("query")
+def ai_query(
+    instruction: str = typer.Argument(..., help="What to read from the current screen."),
+    device_sn: Optional[str] = typer.Option(
+        None,
+        "--device-sn",
+        help="Device serial; omit to use hdc default device.",
+    ),
+    schema: str = typer.Option(
+        "string",
+        "--schema",
+        help="Coerce answer: string | number | boolean",
+    ),
+) -> None:
+    """VLM visual query; prints answer to stdout."""
+    ai_cmd.run_ai_query(
+        device_sn=device_sn,
+        instruction=instruction,
+        schema=schema,
+    )
+
+
+@ai_app.command("assert")
+def ai_assert(
+    instruction: str = typer.Argument(..., help="Condition that should hold on screen."),
+    device_sn: Optional[str] = typer.Option(
+        None,
+        "--device-sn",
+        help="Device serial; omit to use hdc default device.",
+    ),
+) -> None:
+    """VLM assertion; exit code 3 on failure."""
+    ai_cmd.run_ai_assert(device_sn=device_sn, instruction=instruction)
 
 
 def main() -> None:

@@ -1,6 +1,6 @@
 # Hylyre 真机测试框架设计规划
 
-> **状态**：**P2 代码与自测已交付**；**证书 hdc 自动化**见 OpenSpec `add-cert-bootstrap`。下一主目标 **P3**（HylyreAgent）。历史：P0/P1 已交付。
+> **状态**：**P3 已交付并归档**（`add-api-agent` → `openspec/changes/archive/2026-05-11-add-api-agent/`）。**下一主目标 P4**（`hylyre run` / ScenarioRunner + Reporter）。**并行债**：`add-cert-bootstrap`（证书 hdc，可与 P4 并行）；**P2b**（mock 工具链 bootstrap，体验增强，不挡 P4）。**P2** 已归档。历史：P0/P1/P2 已交付。
 > **SSOT**：本文件 `docs/plan.md` 是唯一编辑入口，所有 plan 迭代**只改这里**。
 > **UI 镜像**：`~/.cursor/plans/hylyre_framework_design_*.plan.md` 是 Cursor IDE 提供「执行 / 切换模型」按钮所需的同名副本，**只读、由本文件同步**；切换模型或新会话恢复 plan 时点那一份。每次 `docs/plan.md` 改动后，AI 需把全文 + frontmatter 同步到该副本（顶部带「Auto-mirrored」提示）。
 > **配套进度叙事**：见 [`progress.md`](./progress.md)。
@@ -17,11 +17,14 @@
 - [x] **P0.6** 进度说明书第一篇 docs/progress.md + README.md 扩写
 - [x] **P0.7** P0 完成校验：pip install -e . / hylyre --help / hylyre doctor / pytest / openspec list 全绿
 - [x] **P1** Hypium 内层：HypiumDriver 实现 connect/start_app/touch/input/screenshot，冻结 UiDriverBase ABC（+ L1 单测 + L2 FakeUiDriver 契约测试 + L3 集成测试覆盖率 ≥ 70%）；OpenSpec `add-driver-hypium` 已归档
-- [x] **P2** Lyrebird 内层：`LyrebirdController` + `hylyre mock *` + `FakeMockController` + respx/L1–L3；**设备 MITM 证书自动化**拆至 OpenSpec **`add-cert-bootstrap`**（与 §7 风险项一致）。细粒度勾选见 `openspec/changes/add-driver-lyrebird/tasks.md`。
-- [ ] **P3** 外层 HylyreAgent：Midscene 风格 ai_action / ai_query / ai_assert / ai_tap / ai_input（VLM endpoint 走环境变量）（+ L1 单测，VLM 调用全部 mock；agent 行为不依赖真实模型）
+- [x] **P2** Lyrebird 内层：`LyrebirdController` + `hylyre mock *` + `FakeMockController` + respx/L1–L3；**设备 MITM 证书自动化**拆至 OpenSpec **`add-cert-bootstrap`**（与 §7 风险项一致）。细粒度勾选见 `openspec/changes/archive/2026-05-11-add-driver-lyrebird/tasks.md`（已归档）。
+- [ ] **P2b** Mock 工具链**自动化安装**：**主路径为 pip**（`pip install 'hylyre[mock]'`，同环境安装或校验 **mitmproxy**）；形态为 **`hylyre bootstrap mock`** 与/或仓库内 **`scripts/bootstrap_mock.*`**；结束后复用 **`doctor` 同源检测**。**Windows**（OpenSSL `LIB`/`INCLUDE`、MSVC）、**Docker**（`overbridge/lyrebird` + `HYLYRE_LYREBIRD_URL`）仅作**失败回退与引导**（输出可复制命令 + README 锚点），不默认静默安装系统级组件。OpenSpec change 待定（如 `add-toolchain-bootstrap-mock`）。
+- [x] **P3** 外层 HylyreAgent：`HylyreAgent` + Midscene 风格 `ai_action` / `ai_query` / `ai_assert` / `ai_tap` / `ai_input` / `ai_wait_for` / `ai_locate`（VLM 走 `HYLYRE_VLM_*`；单测 `FakeVlmClient`）。OpenSpec **`add-api-agent`** 已归档至 `openspec/changes/archive/2026-05-11-add-api-agent/`。
 - [ ] **P4** ScenarioRunner + Reporter：解析 test-plan.md → 串联 UI+mock → 产 test-report.md + trace.json（+ L4 自有 schema 全量校验 + L5 mini-harness 上线，作为 `hylyre run` 内置门禁；本仓 fixtures 即可端到端跑通）
 - [ ] **P5** 薄 MCP wrapper：FastMCP 封 5-8 原子 tool，与 CLI 共享业务实现（+ tool 描述长度 lint < 500 tokens/个；MCP 与 CLI 行为一致性 contract test）
 - [ ] **P6** 反哺 Skill 6（遗留待评审）：选 SimulatedWalletForHmos 真实 feature 做端到端回归 + 给 framework/ 提 PR
+
+> **并行债与主线**：**`add-cert-bootstrap`**（设备 MITM 证书 hdc）**与 P4 并行**推进即可，宜在 **P4 端到端真机 + Lyrebird 代理必现** 前具备首版能力；**P2b**（mock 工具链 `bootstrap`，pip 优先）为**体验增强**，可在 **P4 开发间隙或 P4 之后**做，**不作为 P4 退出条件**。
 
 ---
 
@@ -36,6 +39,7 @@
 - **P4 端到端验证 feature**：遗留问题。P0–P3 全部完成后，依据彼时 SimulatedWalletForHmos 的 `doc/features/` 实际状态再选；先用本仓 `tests/e2e/fixtures/` 下的 mock test-plan.md 跑 schema 闭环。
 - **自测试为一等公民（新增）**：Hylyre 不依赖任何外部仓做质量门禁。从 P0 起就铺设五层自测试金字塔（L1 单元 / L2 ABC 契约 + fakes / L3 集成测试 + fake sidecar / L4 自有 schema 自校验 / L5 自托管 mini-harness），与每个阶段同步生长，作为对应 OpenSpec change 的硬性退出条件。详见第 7.5 节。
 - **输出契约 SSOT 归属（新增）**：Hylyre 输出格式（`test-report.md` 章节、`trace.json` 字段）的 SSOT **在 Hylyre 仓内** `hylyre/contracts/`。L4 自校验跑这套自有 schema。另起一个**软提醒级**的兼容性 CI：拉 framework 仓的 schema 做差异对比，失败时自动在 `docs/progress.md` 添一条「framework schema drift 待评估」，**不阻塞主 CI、不阻塞发布**。Hylyre 与 framework 之间只单向输出，永不反向引用，避免循环依赖。
+- **Mock 工具链自动化（新增）**：若提供一键/半自动安装，**默认与优选路径为 pip**（`hylyre[mock]`、mitmproxy）；**不**把 Windows 原生 Lyrebird 的系统前置（OpenSSL/MSVC）或 Docker 作为默认静默安装目标，仅作文档化回退与 `doctor`/bootstrap 失败时的指引。
 
 ---
 
@@ -313,7 +317,8 @@ cd framework/harness && npx ts-node harness-runner.ts \
 - **P0 · 骨架（含 openspec init + 自测试基础设施，硬性）** — pyproject.toml、`hylyre` 包导入可用、**`openspec init` 跑完且 `openspec/` 目录与 agent 路由文件全部生成**、`hylyre --help` 输出、`hylyre doctor` 子命令检查 Python/Node/hdc/mitmproxy 环境、**pytest 跑通空骨架 + L4 schema 占位文件就位 + L5 mini-harness 包目录创建 + `compat-framework.yml` workflow 文件就绪** → change `add-mvp-skeleton`
 - **P1 · Hypium 内层** — HypiumDriver 实现 connect/start_app/touch/input/screenshot；UiDriverBase ABC 冻结；`hylyre device list/install`、`hylyre ai tap/input` 真机跑通 — **配套**：L1 driver 单测 + L2 `FakeUiDriver` 契约测试 + L3 集成测试覆盖率 ≥ 70% → change `add-driver-hypium`
 - **P2 · Lyrebird 内层** — LyrebirdController：lifecycle + group activate + 数据加载 + 抓包；`hylyre mock start/activate/capture` 可用 — **配套**：L1 单测 + L2 `FakeMockController` 契约测试 + L3 用 [`respx`](https://github.com/lundberg/respx) 拦截 HTTP，CI 不真起 lyrebird 进程 → change `add-driver-lyrebird`（含子项 `add-cert-bootstrap`）
-- **P3 · 外层 Agent + AI 动词** — `ai_action / ai_query / ai_assert`（含 VLM，参考 Midscene 纯视觉路线；endpoint 走 `HYLYRE_VLM_*` 环境变量，不绑厂商）— **配套**：L1 单测全部 mock VLM 调用，agent 行为不依赖真实模型；`FakeVlmClient` 录制回放 → change `add-api-agent`
+- **P2b · Mock 工具链自动化（pip 优先）** — `hylyre bootstrap mock` 与/或 `scripts/bootstrap_mock.*`：默认 **`pip install 'hylyre[mock]'`** + mitmproxy 安装/校验；成功后与 **`doctor` 共享检测逻辑**；Windows OpenSSL/MSVC、Docker 仅文档与失败回退（不默认静默系统安装）→ change 待定（如 `add-toolchain-bootstrap-mock`）
+- **P3 · 外层 Agent + AI 动词** — `HylyreAgent` + `ai_action / ai_query / ai_assert / …`（VLM 经 `HYLYRE_VLM_*`；`HttpVlmClient` + `FakeVlmClient`）— **配套**：L1 单测，CI 不依赖真实模型 → change `add-api-agent`（**已归档** `archive/2026-05-11-add-api-agent`）
 - **P4 · ScenarioRunner + Reporter + L5 mini-harness 上线** — 解析 test-plan.md → 串联 UI + mock → 出 test-report.md + trace.json；**L4 自有 schema 全量校验**；**L5 `hylyre report verify` 实现**并作为 `hylyre run` 的内置最后一步（自我门禁）；本仓 `tests/e2e/fixtures/mock-test-plan.md` 端到端跑通完整闭环，**完全不需要 framework 仓在线** → change `add-scenario-runner`
 - **P5 · MCP wrapper** — FastMCP 封 5–8 原子 tool；与 CLI 共享业务实现 — **配套**：tool 描述长度 lint < 500 tokens / 个；MCP 与 CLI 行为一致性 contract test（同一动作两条路径产物等价） → change `add-mcp-wrapper`
 - **P6 · 反哺 Skill 6（遗留待评审）** — 等 P0–P5 完成后回头看：① 选 SimulatedWalletForHmos 中的一个真实 feature 做端到端真机回归；② 给 framework/ 提 PR 让 Skill 6 SKILL.md Step 5 标注「优先用 Hylyre 自动化」（在 framework repo 而非本 repo）
@@ -324,6 +329,7 @@ cd framework/harness && npx ts-node harness-runner.ts \
 
 - **Hypium 在 Windows 上 xdevice 安装繁琐** → pyproject 把 hypium 标 `[optional-deps] device`，CI 跑非真机单测；`hylyre doctor` 子命令检测环境
 - **Lyrebird 依赖 mitmproxy 证书；HarmonyOS 设备证书信任非交互** → P2 单独立项 `add-cert-bootstrap`；优先 hdc push + bm install 自动化；不行就 doctor 引导
+- **Mock 工具链步骤多、易装失败**（新增） → **P2b**：自动化安装命令 **优选 pip**（`hylyre[mock]` + mitmproxy）；bootstrap 后 **`doctor` 复检**；Windows（`LIB`/`INCLUDE`、MSVC）、Docker 仅 **README + Lyrebird 官方说明** 中的回退路径，不默认静默装系统依赖
 - **AI 动词需 VLM；本地无模型时退化** → 默认走结构化 API（`ai_tap(by_id=...)`），仅显式传 `instruction=...` 才调 VLM；endpoint 走环境变量、不绑厂商
 - **MCP schema 膨胀回到老问题** → 强制 ≤ 8 tool，每个描述 < 500 tokens；CI 加 token 计数 lint
 - **OpenSpec 与 Skill 6 framework SDD 双源** → 明确分工：OpenSpec 管「Hylyre 自身」spec；framework 管「使用 Hylyre 的业务工程」spec；互不干涉

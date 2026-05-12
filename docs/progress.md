@@ -44,15 +44,21 @@
 
 ### 下一步
 
-- 主目标 **P3**（`HylyreAgent` + Midscene 风格 `ai_*`）；证书 hdc 自动化跟进 **`openspec/changes/add-cert-bootstrap/tasks.md`**。
+- **主线**：**P4**（`ScenarioRunner` + `Reporter` + `hylyre run` + L5 `report verify`）。
+- **并行**：**`add-cert-bootstrap`**（证书 hdc）；**P2b**（mock 工具链 bootstrap）— 见 `docs/plan.md` 阶段总览下「并行债与主线」说明。
 
 ---
+
+## 2026-05-12 · P3 收官（add-api-agent 归档）
+
+- **交付**：`HylyreAgent`、`VlmClientBase` / `HttpVlmClient`、`hylyre.wiring`、`hylyre ai action|query|assert`；L1 单测 + 覆盖率门禁通过。
+- **OpenSpec**：`openspec/changes/archive/2026-05-11-add-api-agent/`（`tasks.md` 全勾选）。
 
 ## 2026-05-11 · P2 Lyrebird 与证书分工（闭环）
 
 - **代码交付**：`MockControllerBase` / `LyrebirdController` / `hylyre mock start|stop|status|activate|deactivate|capture|cert`；CI 内 **respx**，不强依赖真 Lyrebird 进程。
 - **OpenSpec**：
-  - `add-driver-lyrebird`：`tasks.md` 中 **13、14** 已勾选闭环说明（**13** → 独立 change **`add-cert-bootstrap`**；**14** → CLI/测已覆盖，真进程依赖本机安装）。
+  - **`add-driver-lyrebird`**：已 **`/opsx:archive` 等价归档** 至 `openspec/changes/archive/2026-05-11-add-driver-lyrebird/`；稳态能力写入 `openspec/specs/driver-lyrebird/spec.md`。原 `tasks.md` 中 **13、14** closure：**13** → 独立 change **`add-cert-bootstrap`**；**14** → CLI/测已覆盖，真进程依赖本机安装。
   - **`add-cert-bootstrap`**：`openspec/changes/add-cert-bootstrap/` 已创建并通过 `openspec validate`（hdc + CA 安装自动化在后续 tasks 实现）。
 - **本机真进程烟测（可选）**：在仓库根执行  
   `python -m pip install -e ".[mock]"` → `python -m hylyre mock start --mock-port 9090 --data <mock数据目录>` → `python -m hylyre mock status` → `python -m hylyre mock stop`。  
@@ -62,5 +68,7 @@
 
 - **`add-mvp-skeleton`** → `openspec/changes/archive/2026-05-11-add-mvp-skeleton/`；稳态能力写入 `openspec/specs/*`。
 - **`add-driver-hypium`** → `openspec/changes/archive/2026-05-11-add-driver-hypium/`；`driver-hypium` 等规范合并至主 specs。
+- **`add-driver-lyrebird`** → `openspec/changes/archive/2026-05-11-add-driver-lyrebird/`；`driver-lyrebird` 规范合并至主 specs。
+- **`add-api-agent`** → `openspec/changes/archive/2026-05-11-add-api-agent/`；`api-agent` 规范见 `openspec/specs/api-agent/spec.md`。
 
 ---

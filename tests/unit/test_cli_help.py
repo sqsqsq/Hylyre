@@ -32,6 +32,9 @@ SUBCOMMANDS = [
     ["ai", "--help"],
     ["ai", "tap", "--help"],
     ["ai", "input", "--help"],
+    ["ai", "action", "--help"],
+    ["ai", "query", "--help"],
+    ["ai", "assert", "--help"],
 ]
 
 

@@ -20,7 +20,9 @@ def require_lyrebird_distribution() -> None:
     if importlib.util.find_spec("lyrebird") is None:
         raise ImportError(
             "The `lyrebird` package is not installed. "
-            "Install mock extra: pip install 'hylyre[mock]'"
+            "Install: pip install 'hylyre[mock]' (or pip install lyrebird). "
+            "Run `hylyre doctor` for mitmproxy / Windows OpenSSL / Docker checks. "
+            "Upstream: https://github.com/Meituan-Dianping/lyrebird#install"
         )
 
 

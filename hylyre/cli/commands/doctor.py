@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -25,6 +27,46 @@ def _python_check() -> CheckResult:
     ok = v.major == 3 and v.minor >= 10
     detail = f"{v.major}.{v.minor}.{v.micro} ({sys.executable})"
     return CheckResult("Python", ok, detail)
+
+
+_LYREBIRD_INSTALL_URL = "https://github.com/Meituan-Dianping/lyrebird#install"
+
+
+def _lyrebird_check() -> CheckResult:
+    if importlib.util.find_spec("lyrebird") is None:
+        return CheckResult(
+            "lyrebird (pip)",
+            False,
+            f"pip install 'hylyre[mock]' or pip install lyrebird — {_LYREBIRD_INSTALL_URL}",
+        )
+    try:
+        import lyrebird as lb  # type: ignore[import-untyped]
+
+        ver = getattr(lb, "__version__", None)
+        detail = f"import ok{f', {ver}' if ver else ''}"
+    except Exception as e:  # pragma: no cover
+        detail = f"package found but import failed: {e}"
+        return CheckResult("lyrebird (pip)", False, detail)
+    return CheckResult("lyrebird (pip)", True, detail)
+
+
+def _windows_openssl_env_check() -> CheckResult | None:
+    if sys.platform != "win32":
+        return None
+    lib = os.environ.get("LIB", "").strip()
+    inc = os.environ.get("INCLUDE", "").strip()
+    if lib and inc:
+        return CheckResult(
+            "Windows: LIB/INCLUDE (Lyrebird OpenSSL)",
+            True,
+            "Both set; ensure they point at a prebuilt OpenSSL as in Lyrebird README.",
+        )
+    return CheckResult(
+        "Windows: LIB/INCLUDE (Lyrebird OpenSSL)",
+        False,
+        "Not set — Lyrebird needs OpenSSL + LIB/INCLUDE on Windows, or use Docker "
+        f"(overbridge/lyrebird). See {_LYREBIRD_INSTALL_URL}",
+    )
 
 
 def _cmd_version(exe: str, *version_args: str) -> tuple[bool, str]:
@@ -67,6 +109,11 @@ def run_doctor() -> None:
     )
     rows.append(CheckResult("mitmproxy", mitm_ok, mitm_detail))
 
+    rows.append(_lyrebird_check())
+    win_ssl = _windows_openssl_env_check()
+    if win_ssl is not None:
+        rows.append(win_ssl)
+
     table = Table(title="Hylyre doctor")
     table.add_column("Check", style="cyan")
     table.add_column("Status", style="bold")
@@ -84,6 +131,13 @@ def run_doctor() -> None:
         console.print(
             "\n[bold red]Python 3.10+ required.[/bold red] "
             "Install from https://www.python.org/downloads/ and ensure `python` is on PATH."
+        )
+    if sys.platform == "win32":
+        console.print(
+            "\n[dim]Lyrebird on Windows: native wheels may require MSVC Build Tools "
+            "(https://visualstudio.microsoft.com/visual-cpp-build-tools/). "
+            "Docker alternative: image overbridge/lyrebird, then set HYLYRE_LYREBIRD_URL "
+            "to the Lyrebird API base URL (see README).[/dim]"
         )
     if not all_ok:
         console.print(

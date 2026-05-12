@@ -1,11 +1,5 @@
-"""Public Midscene-style API (stubs until P3)."""
+"""Public Midscene-style API."""
 
-
-class HylyreAgent:
-    """P0 placeholder instance; P3 wires Hypium + Lyrebird + optional VLM."""
-
-    def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002,ANN003
-        _ = (args, kwargs)
-
+from hylyre.api.agent import HylyreAgent
 
 __all__ = ["HylyreAgent"]
