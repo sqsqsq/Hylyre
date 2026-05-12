@@ -1,6 +1,6 @@
 # Hylyre 真机测试框架设计规划
 
-> **状态**：**P4 进行中**（`add-scenario-runner`：`hylyre run` fake 模式 + `report verify` + 计划解析已落地；真机编排与 OpenSpec 归档待续）。**上一阶段 P3** 已交付并归档。**并行债**：`add-cert-bootstrap`；**P2b** mock bootstrap。
+> **状态**：**P4 已交付**（`add-scenario-runner` → `openspec/changes/archive/2026-05-12-add-scenario-runner/`）：`hylyre run` 真机 + `--use-fakes` CI、`report verify`、计划解析与 `trace` `tool_calls`。**下一主目标 P5**（MCP）。**并行债**：`add-cert-bootstrap`；**P2b** mock bootstrap。
 > **SSOT**：本文件 `docs/plan.md` 是唯一编辑入口，所有 plan 迭代**只改这里**。
 > **UI 镜像**：`~/.cursor/plans/hylyre_framework_design_*.plan.md` 是 Cursor IDE 提供「执行 / 切换模型」按钮所需的同名副本，**只读、由本文件同步**；切换模型或新会话恢复 plan 时点那一份。每次 `docs/plan.md` 改动后，AI 需把全文 + frontmatter 同步到该副本（顶部带「Auto-mirrored」提示）。
 > **配套进度叙事**：见 [`progress.md`](./progress.md)。
@@ -20,7 +20,7 @@
 - [x] **P2** Lyrebird 内层：`LyrebirdController` + `hylyre mock *` + `FakeMockController` + respx/L1–L3；**设备 MITM 证书自动化**拆至 OpenSpec **`add-cert-bootstrap`**（与 §7 风险项一致）。细粒度勾选见 `openspec/changes/archive/2026-05-11-add-driver-lyrebird/tasks.md`（已归档）。
 - [ ] **P2b** Mock 工具链**自动化安装**：**主路径为 pip**（`pip install 'hylyre[mock]'`，同环境安装或校验 **mitmproxy**）；形态为 **`hylyre bootstrap mock`** 与/或仓库内 **`scripts/bootstrap_mock.*`**；结束后复用 **`doctor` 同源检测**。**Windows**（OpenSSL `LIB`/`INCLUDE`、MSVC）、**Docker**（`overbridge/lyrebird` + `HYLYRE_LYREBIRD_URL`）仅作**失败回退与引导**（输出可复制命令 + README 锚点），不默认静默安装系统级组件。OpenSpec change 待定（如 `add-toolchain-bootstrap-mock`）。
 - [x] **P3** 外层 HylyreAgent：`HylyreAgent` + Midscene 风格 `ai_action` / `ai_query` / `ai_assert` / `ai_tap` / `ai_input` / `ai_wait_for` / `ai_locate`（VLM 走 `HYLYRE_VLM_*`；单测 `FakeVlmClient`）；**增量**：`run_planned_action` / `run_planned_tap` / `run_planned_input` + `interpret_query_payload` / `interpret_assert_payload`，供调用方自备模型时对 VLM 同形 JSON 落盘，无需配置 `HYLYRE_VLM_*`。OpenSpec **`add-api-agent`** 已归档至 `openspec/changes/archive/2026-05-11-add-api-agent/`（`openspec/specs/api-agent/spec.md` 已跟进该能力）。
-- [ ] **P4** ScenarioRunner + Reporter：**进行中** — `hylyre run --use-fakes`、计划解析、`test-report.md`/`trace.json`（`0.2-p4`）、`hylyre report verify`、fixture `tests/e2e/fixtures/mock-test-plan.md` 已通；**待办**：真机 + mock 串联、`HylyreAgent` 步骤执行、OpenSpec 归档 `add-scenario-runner`
+- [x] **P4** ScenarioRunner + Reporter：`hylyre run`（`--use-fakes` / 真机 `run_plan_on_agent`、`--bundle` / Lyrebird `--mock-group`）、JSON 或 NL 测试步骤（NL 需 `HYLYRE_VLM_*`）、`test-report.md`+`trace.json`（`0.2-p4`、`tool_calls`）、`hylyre report verify`、fixture 与 OpenSpec **`add-scenario-runner`** 已归档至 `openspec/changes/archive/2026-05-12-add-scenario-runner/`
 - [ ] **P5** 薄 MCP wrapper：FastMCP 封 5-8 原子 tool，与 CLI 共享业务实现（+ tool 描述长度 lint < 500 tokens/个；MCP 与 CLI 行为一致性 contract test）
 - [ ] **P6** 反哺 Skill 6（遗留待评审）：选 SimulatedWalletForHmos 真实 feature 做端到端回归 + 给 framework/ 提 PR
 

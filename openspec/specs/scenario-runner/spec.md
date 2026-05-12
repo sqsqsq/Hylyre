@@ -36,3 +36,14 @@ The system SHALL implement `hylyre run` with `--plan`, `--feature`, `--report-ou
 
 - **WHEN** `hylyre run --help` and `hylyre report verify --help`
 - **THEN** required options are listed
+
+---
+
+### Requirement: Real-device scenario run
+
+The system SHALL run `ScenarioRunner.run_plan_on_agent` when `hylyre run` is invoked **without** `--use-fakes`, connecting via `create_hypium_agent_with_env_vlm`, optionally calling `start_app` with `--bundle`, optionally activating `--mock-group` on Lyrebird, parsing each 测试步骤 line as either JSON (`action` / `touch` / `input`, no VLM required) or natural language (`ai_action`, requires `HYLYRE_VLM_ENDPOINT`), and optionally `ai_assert` on the 预期结果 column unless `--skip-assert-expected`.
+
+#### Scenario: Trace records tool calls
+
+- **WHEN** a real or agent-backed run completes
+- **THEN** `trace.json` includes a `tool_calls` array summarizing steps (may be empty only in `--use-fakes` stub mode)

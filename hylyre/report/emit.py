@@ -115,7 +115,7 @@ def _trace_object(result: ScenarioRunResult, *, model_backend: str) -> dict[str,
         "phase": "testing",
         "outcome": outcome,
         "model_backend": model_backend,
-        "tool_calls": [],
+        "tool_calls": list(result.tool_calls),
         "retries": 0,
         "artifacts": {
             "plan": result.plan.path.as_posix(),

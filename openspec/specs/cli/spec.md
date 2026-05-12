@@ -17,7 +17,13 @@ The system SHALL ship a `hylyre` console script registering top-level commands: 
 
 #### Scenario: Nested report verify
 
-- GIVEN a developer runs `hylyre report verify --help`
-- WHEN P0 build is complete
-- THEN help is shown (implementation completes in P4)
+- **GIVEN** a developer runs `hylyre report verify --help`
+- **WHEN** P4 build is complete
+- **THEN** help lists `--report`, `--trace`, and `--plan`
+
+#### Scenario: Run lists device options
+
+- **GIVEN** a developer runs `hylyre run --help`
+- **WHEN** P4 build is complete
+- **THEN** help lists `--use-fakes`, `--device-sn`, `--bundle`, `--mock-port`, `--lyrebird-url`, `--mock-group`, and `--skip-assert-expected`
 

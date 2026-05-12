@@ -6,7 +6,7 @@
 - [x] 1.4 Implement `hylyre.harness.verify_report`
 - [x] 1.5 CLI `hylyre run` + `hylyre report verify` options
 - [x] 1.6 Fixture `tests/e2e/fixtures/mock-test-plan.md` + e2e + unit tests
-- [ ] 1.7 Archive change + merge spec deltas into `openspec/specs/` (on completion)
+- [x] 1.7 Archive change + merge spec deltas into `openspec/specs/`（`openspec/changes/archive/2026-05-12-add-scenario-runner/`；稳态 `openspec/specs/scenario-runner/spec.md`）
 
 ## 2. Validation
 

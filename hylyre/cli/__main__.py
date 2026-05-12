@@ -65,7 +65,37 @@ def run(
     use_fakes: bool = typer.Option(
         False,
         "--use-fakes",
-        help="Use stub execution (no Hypium device); required until real runs land.",
+        help="Stub results only (no Hypium); for CI. Omit this to run on a connected device.",
+    ),
+    device_sn: Optional[str] = typer.Option(
+        None,
+        "--device-sn",
+        help="Device serial for Hypium (hdc -t); default from Hypium when omitted.",
+    ),
+    bundle: Optional[str] = typer.Option(
+        None,
+        "--bundle",
+        help="App bundle for start_app() before cases (optional).",
+    ),
+    mock_port: Optional[int] = typer.Option(
+        None,
+        "--mock-port",
+        help="Lyrebird admin API port on 127.0.0.1 (implies mock controller).",
+    ),
+    lyrebird_url: Optional[str] = typer.Option(
+        None,
+        "--lyrebird-url",
+        help="Lyrebird base URL (overrides --mock-port and HYLYRE_LYREBIRD_URL).",
+    ),
+    mock_group: Optional[str] = typer.Option(
+        None,
+        "--mock-group",
+        help="UUID of Lyrebird mock group to activate before cases.",
+    ),
+    skip_assert_expected: bool = typer.Option(
+        False,
+        "--skip-assert-expected",
+        help="Do not call ai_assert on 预期结果 column (NL needs VLM).",
     ),
 ) -> None:
     """Execute a test plan and emit report + trace (verify as gate)."""
@@ -75,6 +105,12 @@ def run(
         report_out=report_out,
         trace_out=trace_out,
         use_fakes=use_fakes,
+        device_sn=device_sn,
+        bundle=bundle,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+        mock_group=mock_group,
+        skip_assert_expected=skip_assert_expected,
     )
 
 

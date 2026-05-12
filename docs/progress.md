@@ -44,16 +44,16 @@
 
 ### 下一步
 
-- **主线**：**P4**（`ScenarioRunner` + `Reporter` + `hylyre run` + L5 `report verify`）。
+- **主线**：**P5**（薄 MCP wrapper）。
 - **并行**：**`add-cert-bootstrap`**（证书 hdc）；**P2b**（mock 工具链 bootstrap）— 见 `docs/plan.md` 阶段总览下「并行债与主线」说明。
 
 ---
 
-## 2026-05-12 · P4 起步（add-scenario-runner 首版）
+## 2026-05-12 · P4 收官（add-scenario-runner 归档）
 
-- **交付**：`hylyre.scenario`（`parse_test_plan`、`ScenarioRunner(use_fakes=True)`）、`hylyre.report.emit`、`hylyre.harness.verify_report`（L5）、`hylyre run` / `hylyre report verify` CLI；`tests/e2e/fixtures/mock-test-plan.md`；`schema_version` `0.2-p4`。
-- **未纳入**：无 `--use-fakes` 的真机编排（仍为 `NotImplementedError`）；OpenSpec change **未归档**（`openspec/changes/add-scenario-runner/tasks.md` 仍含 1.7）。
-- **验证**：`python -m pytest` 全绿。
+- **交付**：`ScenarioRunner.run_plan_on_agent`（真机 / `HylyreAgent`）、`hylyre run` 扩展选项（`--device-sn`、`--bundle`、`--mock-port`、`--lyrebird-url`、`--mock-group`、`--skip-assert-expected`）、测试步骤 **JSON 或 NL**（NL 需 VLM）、`trace.tool_calls`、`docs/plan` P4 闭合。
+- **OpenSpec**：`openspec/changes/archive/2026-05-12-add-scenario-runner/`（tasks 全勾选）；稳态 **`openspec/specs/scenario-runner/spec.md`**。
+- **验证**：`python -m pytest` 全绿（128）。
 
 ## 2026-05-12 · P3 收官（add-api-agent 归档）
 
@@ -76,5 +76,6 @@
 - **`add-driver-hypium`** → `openspec/changes/archive/2026-05-11-add-driver-hypium/`；`driver-hypium` 等规范合并至主 specs。
 - **`add-driver-lyrebird`** → `openspec/changes/archive/2026-05-11-add-driver-lyrebird/`；`driver-lyrebird` 规范合并至主 specs。
 - **`add-api-agent`** → `openspec/changes/archive/2026-05-11-add-api-agent/`；`api-agent` 规范见 `openspec/specs/api-agent/spec.md`。
+- **`add-scenario-runner`** → `openspec/changes/archive/2026-05-12-add-scenario-runner/`；`scenario-runner` 规范见 `openspec/specs/scenario-runner/spec.md`。
 
 ---
