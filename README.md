@@ -42,6 +42,7 @@ openspec list
 6. **VLM（P3，`hylyre ai action|query|assert`）**：需配置 **`HYLYRE_VLM_ENDPOINT`**（OpenAI 兼容 `…/v1/chat/completions`；DeepSeek 官方示例为 `https://api.deepseek.com/chat/completions`）、可选 **`HYLYRE_VLM_API_KEY`**、**`HYLYRE_VLM_MODEL`**；未配置时自然语言子命令会报错退出
 7. **外部规划器（无 VLM）**：可不设 `HYLYRE_VLM_*`，由调用方对 `agent.ui.screenshot()` 等做理解与 JSON 规划，再通过 **`HylyreAgent.run_planned_action` / `run_planned_tap` / `run_planned_input`** 执行与内置 VLM 同形的 payload；查询 / 断言结果可用 **`interpret_query_payload`**、**`interpret_assert_payload`** 做与 `ai_query` / `ai_assert` 一致的解析
 8. **场景跑批（P4）**：`hylyre run --plan … --feature … --report-out … --trace-out …`。加 **`--use-fakes`** 为离线桩结果；**omit** 时在已连接真机上跑：`pip install 'hylyre[device]'`，可选 **`--device-sn`**、**`--bundle`**（`start_app`）、**`--mock-port` / `--lyrebird-url`** + **`--mock-group`**。测试步骤支持**单行 JSON**（`action`/`touch`/`input`，无需 VLM）或**自然语言**（需 **`HYLYRE_VLM_*`**）。**`--skip-assert-expected`** 可跳过对「预期结果」列的 `ai_assert`
+9. **做法 A（Cursor / NL → test-plan JSON）**：由 Agent 将意图写成 `test-plan.md`「测试步骤」列的**单行 JSON**，真机执行步骤时**不必**配置 VLM。约定与示例见 [`docs/agent-plan-a.md`](docs/agent-plan-a.md)、`tests/e2e/fixtures/json-steps-test-plan.md`；Cursor 规则副本见 [`contrib/cursor-rules/hylyre-plan-a.mdc`](contrib/cursor-rules/hylyre-plan-a.mdc)（复制到 `.cursor/rules/`）
 
 ## 当前阶段
 

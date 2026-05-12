@@ -1,0 +1,37 @@
+---
+description: Hylyre 做法 A — 将自然语言测试意图写进 test-plan.md 的 JSON 步骤（无运行态 VLM）
+globs: "**/*test-plan*.md"
+alwaysApply: false
+---
+
+# Hylyre 做法 A（JSON 测试步骤）
+
+当用户要**真机跑 Hylyre**且**不想依赖运行态 VLM**理解步骤时：把「测试步骤」列写成**单行 JSON**，不要用自然语言段落（自然语言会触发 `ai_action`，必须有 `HYLYRE_VLM_*`）。
+
+## 表格约束
+
+- 文档中须有标题 **`## 测试用例清单`** 或 **`### 测试用例清单`**。
+- 表头 7 列顺序：`用例编号 | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 优先级 | 关联 AC`。
+- 同一单元格内多步：用 **`;` 或 `；`** 分隔多条 JSON，不要用 `<br/>`。
+- 全表避免出现会破坏表格的 **`|`**（尤其步骤列 JSON 内的字符串）。
+
+## 步骤 JSON（三选一，根键唯一）
+
+1. **action**（与 `run_planned_action` 一致）
+   - `{"action":{"type":"touch","by_text":"登录"}}`
+   - `{"action":{"type":"touch","by_id":"btn_ok","wait_time":0.2}}`
+   - `{"action":{"type":"input","text":"100","by_id":"amount"}}`
+2. **touch**（与 `run_planned_tap` 一致）
+   - `{"touch":{"by_text":"充值"}}` 或 `{"touch":{"x":10,"y":20}}`
+3. **input**（与 `run_planned_input` 一致）
+   - `{"input":{"text":"hello","by_id":"field","by_text":null}}`
+
+翻译用户意图时：优先 **by_id**（稳定）；只有没有 id 时才用 **by_text** 或坐标。
+
+## 预期结果
+
+不配 VLM 时，「预期结果」列**不会**被执行器自动断言（仅供人读）。需要自动断言则配置 `HYLYRE_VLM_*` 或接受仅执行 JSON 步骤。
+
+## 详情
+
+见仓库 `docs/agent-plan-a.md` 与示例 `tests/e2e/fixtures/json-steps-test-plan.md`。
