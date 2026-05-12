@@ -1,6 +1,6 @@
 # Hylyre 真机测试框架设计规划
 
-> **状态**：**P5 MCP 已交付**；**并行能力**：MITM CA 首版 `hylyre mock push-ca`（`hdc file send`）+ `doctor` 的 `mitmproxy CA (PEM)` 检查；**P2b** 首版 `hylyre bootstrap mock [--install]`。**P4** 已归档；**L5** 已与 §7.5 补严。**下一主目标 P6**（反哺 Skill 6，可选）或补齐 **`openspec/changes/add-cert-bootstrap` 正式 archive**、仓库 `scripts/bootstrap_mock.*`（若仍需要）。
+> **状态**：**P5 MCP 已交付**；**并行能力**：MITM CA 首版 `hylyre mock push-ca`（`hdc file send`）+ `doctor` 的 `mitmproxy CA (PEM)` 检查；**P2b** 首版 `hylyre bootstrap mock [--install]`。**P4** 已归档；**L5** 已与 §7.5 补严；**`add-cert-bootstrap`** 已归档至 `openspec/changes/archive/2026-05-12-add-cert-bootstrap/`。**下一主目标 P6**（反哺 Skill 6，可选）或仓库 `scripts/bootstrap_mock.*`（若仍需要）。
 > **SSOT**：本文件 `docs/plan.md` 是唯一编辑入口，所有 plan 迭代**只改这里**。
 > **UI 镜像**：`~/.cursor/plans/hylyre_framework_design_*.plan.md` 是 Cursor IDE 提供「执行 / 切换模型」按钮所需的同名副本，**只读、由本文件同步**；切换模型或新会话恢复 plan 时点那一份。每次 `docs/plan.md` 改动后，AI 需把全文 + frontmatter 同步到该副本（顶部带「Auto-mirrored」提示）。
 > **配套进度叙事**：见 [`progress.md`](./progress.md)。
@@ -24,7 +24,7 @@
 - [x] **P5** 薄 MCP wrapper：`hylyre mcp serve`（FastMCP stdio）、8 个原子 tool 与 CLI 同源实现、`tests/unit/test_mcp_server.py`；可选 `hylyre[mcp]`；规约 **`openspec/specs/mcp-wrapper/spec.md`**
 - [ ] **P6** 反哺 Skill 6（遗留待评审）：选 SimulatedWalletForHmos 真实 feature 做端到端回归 + 给 framework/ 提 PR
 
-> **并行债与主线**：**`add-cert-bootstrap`**（设备 MITM 证书 hdc）**与 P4 并行**推进即可，宜在 **P4 端到端真机 + Lyrebird 代理必现** 前具备首版能力；**P2b**（mock 工具链 `bootstrap`，pip 优先）为**体验增强**，可在 **P4 开发间隙或 P4 之后**做，**不作为 P4 退出条件**。
+> **并行债与主线**：**设备 MITM 证书 hdc 首版**（`mock push-ca` + `cert-bootstrap` spec）**已交付并归档**；**P2b**（mock 工具链 `bootstrap`，pip 优先）为**体验增强**，可在 **P4 开发间隙或 P4 之后**做，**不作为 P4 退出条件**。（历史：曾与 P4 并行推进。）
 
 ---
 

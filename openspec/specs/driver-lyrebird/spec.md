@@ -2,7 +2,7 @@
 
 ## Purpose
 
-HTTP Mock 侧 Lyrebird 适配：`MockControllerBase` / `LyrebirdController`（生命周期、分组、数据、抓包）、`hylyre mock` CLI；P2 已交付。设备侧 MITM 证书自动化见 OpenSpec change **`add-cert-bootstrap`**。
+HTTP Mock 侧 Lyrebird 适配：`MockControllerBase` / `LyrebirdController`（生命周期、分组、数据、抓包）、`hylyre mock` CLI；P2 已交付。设备侧 MITM 证书推送与清单见 **`openspec/specs/cert-bootstrap/spec.md`**（归档 `openspec/changes/archive/2026-05-12-add-cert-bootstrap/`）。
 
 ## Requirements
 
@@ -30,7 +30,7 @@ The system SHALL provide `hylyre.drivers.lyrebird.LyrebirdController` implementi
 
 ### Requirement: Mock CLI
 
-The system SHALL register `hylyre mock` with subcommands `start`, `stop`, `status`, `activate`, `deactivate`, `capture`, `cert` documented in `--help`.
+The system SHALL register `hylyre mock` with subcommands `start`, `stop`, `status`, `activate`, `deactivate`, `capture`, `cert`, `push-ca` documented in `--help`.
 
 #### Scenario: Start writes pidfile
 
@@ -52,7 +52,7 @@ The system SHALL expose `hylyre.drivers.base.MockControllerBase` as the async co
 
 ### Requirement: MITM trust checklist (P2 placeholder)
 
-The system SHALL expose `mitm_trust_instructions()` and `hylyre mock cert` printing actionable steps until automated `add-cert-bootstrap` lands.
+The system SHALL expose `mitm_trust_instructions()` and `hylyre mock cert` printing actionable steps, and SHALL document / cross-reference `hylyre mock push-ca` per `openspec/specs/cert-bootstrap/spec.md`.
 
 #### Scenario: CLI prints checklist
 

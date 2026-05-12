@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Host-side 辅助将 mitmproxy / Lyrebird MITM 根证书推到 HarmonyOS 设备（`hdc file send`），并保留与静态清单一致的文档指引；与 `openspec/changes/add-cert-bootstrap` 设计一致。
+Host-side 辅助将 mitmproxy / Lyrebird MITM 根证书推到 HarmonyOS 设备（`hdc file send`），并保留与静态清单一致的文档指引；设计与归档记录见 `openspec/changes/archive/2026-05-12-add-cert-bootstrap/`。
 
 ## Requirements
 

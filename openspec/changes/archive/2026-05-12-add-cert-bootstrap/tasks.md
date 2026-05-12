@@ -17,6 +17,6 @@
 
 ## 4. 收口
 
-- [x] 7. 稳态 spec 已写入 `openspec/specs/cert-bootstrap/spec.md`（change 目录可后续 `/opsx:archive` Formal 归档）
+- [x] 7. 稳态 spec 已写入 `openspec/specs/cert-bootstrap/spec.md`；本 change 已 Formal 归档至 `openspec/changes/archive/2026-05-12-add-cert-bootstrap/`
 - [x] 8. 在 `docs/progress.md` 记一条证书自动化首版结论
 

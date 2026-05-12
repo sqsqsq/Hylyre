@@ -26,7 +26,7 @@
 ## P2.5 证书（占位）
 
 - [x] 12. `cert_bootstrap.mitm_trust_instructions` + `mock cert`
-- [x] 13. 证书自动化已拆为独立 change **`add-cert-bootstrap`**（见 `openspec/changes/add-cert-bootstrap/`，实装以该目录 `tasks.md` 为准）
+- [x] 13. 证书自动化已拆为独立 change **`add-cert-bootstrap`**（已归档 `openspec/changes/archive/2026-05-12-add-cert-bootstrap/`，稳态 `openspec/specs/cert-bootstrap/spec.md`）
 
 ## P2.6 真机 / 进程烟测（可选）
 
