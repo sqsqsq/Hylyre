@@ -55,6 +55,13 @@
 - **OpenSpec**：`openspec/changes/archive/2026-05-12-add-scenario-runner/`（tasks 全勾选）；稳态 **`openspec/specs/scenario-runner/spec.md`**。
 - **验证**：`python -m pytest` 全绿（128）。
 
+## 2026-05-12 · L5 mini-harness 与 `docs/plan.md` §7.5 对齐（补严）
+
+- **契约**：`report-sections.yaml` 增加 `pass_rate_required_tiers`、`pass_rate_overall_label`；L5 校验分级通过率、缺陷清单、结论段（含 `outcome` / `n/m`）、`trace.json` `outcome` 与执行表一致。
+- **实现**：`hylyre/report/emit.py` 分层归一与四行通过率；`hylyre/harness/runner.py` 补严；`tests/schema/test_contracts_loadable.py`、`tests/unit/test_harness_verify.py`、`openspec/specs/contracts/spec.md` 已跟进。
+- **文档**：`docs/plan.md` §7.5 更新检查项与「契约演进顺序」；本文件与 `hylyre/contracts/README.md` 记下维护流程。
+- **存量报告**：仓库根 **`reports/`** 目录被 `.gitignore` 忽略（真机/Hypium 产物）；**基准核对**使用 `tests/e2e/fixtures/mock-test-plan.md`：执行 `hylyre run --use-fakes …` + `hylyre report verify …`（本机示例：`reports/ci-smoke/` 烟测产物，`verify` 输出 `Contracts OK`）或跑 `tests/e2e/test_run_fake_pipeline.py`。业务侧旧版手工 `test-report.md` 需按新契约重生成或手改后再验。
+
 ## 2026-05-12 · P3 收官（add-api-agent 归档）
 
 - **交付**：`HylyreAgent`、`VlmClientBase` / `HttpVlmClient`、`hylyre.wiring`、`hylyre ai action|query|assert`；L1 单测 + 覆盖率门禁通过。

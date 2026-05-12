@@ -10,6 +10,7 @@ Consumer repos (e.g. SimulatedWalletForHmos `framework/`) may have their own har
 
 ## Change process
 
-1. Propose via OpenSpec change under `openspec/changes/*/specs/contracts/`.
-2. Update this directory and `tests/schema/` together.
-3. Run `pytest` and `hylyre report verify` (P4+) before merging.
+1. Propose via OpenSpec change under `openspec/changes/*/specs/contracts/` (or edit `openspec/specs/contracts/spec.md` for small doc-only deltas, as appropriate).
+2. Update **`hylyre/contracts/`** first (`output-schema.json`, `report-sections.yaml`), then **`hylyre/report/emit.py`** and **`hylyre/harness/runner.py`** so generation and L5 verification stay aligned.
+3. Update **`tests/schema/`** and L5 unit tests (for example `tests/unit/test_harness_verify.py`) in the same PR.
+4. Run **`python -m pytest`** and, for a representative plan, **`hylyre run --use-fakes …` + `hylyre report verify …`** (fixture: `tests/e2e/fixtures/mock-test-plan.md`) before merging.

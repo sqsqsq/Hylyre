@@ -1,6 +1,6 @@
 # Hylyre 真机测试框架设计规划
 
-> **状态**：**P4 已交付**（`add-scenario-runner` → `openspec/changes/archive/2026-05-12-add-scenario-runner/`）：`hylyre run` 真机 + `--use-fakes` CI、`report verify`、计划解析与 `trace` `tool_calls`。**下一主目标 P5**（MCP）。**并行债**：`add-cert-bootstrap`；**P2b** mock bootstrap。
+> **状态**：**P4 已交付**（`add-scenario-runner` → `openspec/changes/archive/2026-05-12-add-scenario-runner/`）：`hylyre run` 真机 + `--use-fakes` CI、`report verify`、计划解析与 `trace` `tool_calls`。**L5 `report verify` 已与 §7.5 补严**（分层通过率契约键、`emit` 固定 P0/P1/P2/总体、缺陷清单与结论、`trace.json` `outcome` 与执行表一致）。**下一主目标 P5**（MCP）。**并行债**：`add-cert-bootstrap`；**P2b** mock bootstrap。
 > **SSOT**：本文件 `docs/plan.md` 是唯一编辑入口，所有 plan 迭代**只改这里**。
 > **UI 镜像**：`~/.cursor/plans/hylyre_framework_design_*.plan.md` 是 Cursor IDE 提供「执行 / 切换模型」按钮所需的同名副本，**只读、由本文件同步**；切换模型或新会话恢复 plan 时点那一份。每次 `docs/plan.md` 改动后，AI 需把全文 + frontmatter 同步到该副本（顶部带「Auto-mirrored」提示）。
 > **配套进度叙事**：见 [`progress.md`](./progress.md)。
@@ -361,11 +361,16 @@ cd framework/harness && npx ts-node harness-runner.ts \
 
 - 报告必需章节：测试概览 / 测试执行结果 / 缺陷清单（如有失败） / 通过率统计 / 结论
 - 执行结果表格：状态值 ∈ {通过,失败,阻塞,跳过}
-- 通过率统计：含 P0/P1/P2 各通过率 + 总体
-- 结论判定：达标 / 有条件达标 / 不达标，且与通过率数据一致
+- 通过率统计：含 P0/P1/P2 各通过率 + 总体；**数值须与执行结果表按优先级汇总一致**，并与 `report-sections.yaml` 中 `pass_rate_required_tiers` / `pass_rate_overall_label` 契约一致
+- 缺陷清单：存在失败/阻塞/跳过时须有对应列表项；**全通过时须显式写「无失败项」**（与表一致）
+- 结论判定：达标 / 有条件达标 / 不达标；**段内 `outcome=`、`通过率 n/m`、段首结论词**须与由表推出的 outcome 及分级比例一致
 - 计划-报告一致性：报告中所有用例编号必须在计划中存在
 - AC 追溯：报告中每条用例必须有非空「关联 AC」字段
-- trace.json：通过 `output-schema.json` jsonschema 校验
+- trace.json：通过 `output-schema.json` jsonschema 校验；**顶层 `outcome` 与执行表推导一致**
+
+**L5 补严落地（2026-05）**：契约侧增加分层通过率元数据；`hylyre/report/emit.py` 归一优先级（非 P0/P1 并入 P2）并固定输出四行通过率；`hylyre/harness/runner.py` 将上述一致性校验纳入 `verify_report`；单测与 `openspec/specs/contracts/spec.md` 已跟进。
+
+**契约演进顺序**（变更 `test-report.md` / `trace.json` 形状或 L5 规则时）：① 先改 **`hylyre/contracts/`**（`output-schema.json`、`report-sections.yaml`）；② 再改 **`hylyre/report/emit.py`** 与 **`hylyre/harness/runner.py`**；③ 同步 **`tests/schema/`**、**L5 相关单测**、**`openspec/specs/contracts/spec.md`**（及必要时的 change delta）；④ 合并前 **`python -m pytest` 全绿**，并对代表性计划执行 **`hylyre run --use-fakes` + `hylyre report verify`**（本仓基准：`tests/e2e/fixtures/mock-test-plan.md`）。
 
 ---
 
