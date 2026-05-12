@@ -12,6 +12,7 @@ from hylyre.cli.commands import (
     device as device_cmd,
     doctor as doctor_cmd,
     mock_cmd,
+    run_cmd,
 )
 
 app = typer.Typer(
@@ -37,9 +38,44 @@ def _p0_placeholder() -> None:
 
 
 @app.command()
-def run() -> None:
-    """Execute a test plan end-to-end (P4)."""
-    _p0_placeholder()
+def run(
+    plan: Path = typer.Option(
+        ...,
+        "--plan",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to test-plan.md",
+    ),
+    feature: str = typer.Option(
+        ...,
+        "--feature",
+        help="Feature name (metadata for report/trace)",
+    ),
+    report_out: Path = typer.Option(
+        ...,
+        "--report-out",
+        help="Output test-report.md path",
+    ),
+    trace_out: Path = typer.Option(
+        ...,
+        "--trace-out",
+        help="Output trace.json path",
+    ),
+    use_fakes: bool = typer.Option(
+        False,
+        "--use-fakes",
+        help="Use stub execution (no Hypium device); required until real runs land.",
+    ),
+) -> None:
+    """Execute a test plan and emit report + trace (verify as gate)."""
+    run_cmd.run_scenario(
+        plan=plan,
+        feature=feature,
+        report_out=report_out,
+        trace_out=trace_out,
+        use_fakes=use_fakes,
+    )
 
 
 @device_app.command("list")
@@ -63,9 +99,31 @@ def device_install(
 
 
 @report_app.command("verify")
-def report_verify() -> None:
-    """Verify test-report.md + trace.json against Hylyre contracts (P4)."""
-    _p0_placeholder()
+def report_verify(
+    report: Path = typer.Option(
+        ...,
+        "--report",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+    ),
+    trace: Path = typer.Option(
+        ...,
+        "--trace",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+    ),
+    plan: Path = typer.Option(
+        ...,
+        "--plan",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+    ),
+) -> None:
+    """Verify test-report.md + trace.json against Hylyre contracts."""
+    run_cmd.run_report_verify(report=report, trace=trace, plan=plan)
 
 
 @app.command()

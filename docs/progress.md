@@ -49,6 +49,12 @@
 
 ---
 
+## 2026-05-12 · P4 起步（add-scenario-runner 首版）
+
+- **交付**：`hylyre.scenario`（`parse_test_plan`、`ScenarioRunner(use_fakes=True)`）、`hylyre.report.emit`、`hylyre.harness.verify_report`（L5）、`hylyre run` / `hylyre report verify` CLI；`tests/e2e/fixtures/mock-test-plan.md`；`schema_version` `0.2-p4`。
+- **未纳入**：无 `--use-fakes` 的真机编排（仍为 `NotImplementedError`）；OpenSpec change **未归档**（`openspec/changes/add-scenario-runner/tasks.md` 仍含 1.7）。
+- **验证**：`python -m pytest` 全绿。
+
 ## 2026-05-12 · P3 收官（add-api-agent 归档）
 
 - **交付**：`HylyreAgent`、`VlmClientBase` / `HttpVlmClient`、`hylyre.wiring`、`hylyre ai action|query|assert`；L1 单测 + 覆盖率门禁通过。
