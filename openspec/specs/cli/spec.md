@@ -27,3 +27,8 @@ The system SHALL ship a `hylyre` console script registering top-level commands: 
 - **WHEN** P4 build is complete
 - **THEN** help lists `--use-fakes`, `--device-sn`, `--bundle`, `--mock-port`, `--lyrebird-url`, `--mock-group`, and `--skip-assert-expected`
 
+#### Scenario: MCP serve help
+
+- **GIVEN** a developer runs `hylyre mcp serve --help`
+- **WHEN** P5 build is complete
+- **THEN** help lists `--show-banner` and references the optional `hylyre[mcp]` dependency

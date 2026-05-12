@@ -185,9 +185,23 @@ app.add_typer(mcp_app, name="mcp")
 
 
 @mcp_app.command("serve")
-def mcp_serve() -> None:
-    """Start MCP stdio server (P5)."""
-    _p0_placeholder()
+def mcp_serve(
+    show_banner: bool = typer.Option(
+        False,
+        "--show-banner",
+        help="Print FastMCP startup banner (default off for host compatibility).",
+    ),
+) -> None:
+    """Start MCP stdio server (FastMCP; requires: pip install 'hylyre[mcp]')."""
+    try:
+        from hylyre.mcp.server import serve_stdio
+    except ImportError as exc:
+        typer.secho(
+            "FastMCP not installed. Run: pip install 'hylyre[mcp]'",
+            err=True,
+        )
+        raise typer.Exit(code=2) from exc
+    serve_stdio(show_banner=show_banner)
 
 
 @ai_app.callback()

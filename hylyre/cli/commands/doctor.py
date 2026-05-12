@@ -88,8 +88,8 @@ def _cmd_version(exe: str, *version_args: str) -> tuple[bool, str]:
         return False, str(e)
 
 
-def run_doctor() -> None:
-    """Print environment readiness for Hylyre development and execution."""
+def gather_doctor_checks() -> list[CheckResult]:
+    """Collect environment checks (shared by CLI doctor and MCP)."""
     rows: list[CheckResult] = [_python_check()]
 
     ok_node, node_detail = _cmd_version("node", "--version")
@@ -113,6 +113,26 @@ def run_doctor() -> None:
     win_ssl = _windows_openssl_env_check()
     if win_ssl is not None:
         rows.append(win_ssl)
+
+    return rows
+
+
+def format_doctor_plain(rows: list[CheckResult]) -> str:
+    """Plain-text doctor summary for MCP (no Rich markup)."""
+    lines = ["Hylyre doctor", "-" * 40]
+    all_ok = True
+    for r in rows:
+        all_ok = all_ok and r.ok
+        status = "OK" if r.ok else "MISSING"
+        lines.append(f"{r.name}: {status} — {r.detail}")
+    lines.append("-" * 40)
+    lines.append("All checks passed." if all_ok else "Some optional tools are missing.")
+    return "\n".join(lines)
+
+
+def run_doctor() -> None:
+    """Print environment readiness for Hylyre development and execution."""
+    rows = gather_doctor_checks()
 
     table = Table(title="Hylyre doctor")
     table.add_column("Check", style="cyan")

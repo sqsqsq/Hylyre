@@ -13,7 +13,7 @@ from hylyre.report.emit import write_run_artifacts
 from hylyre.scenario.runner import ScenarioRunResult, ScenarioRunner
 
 
-def run_scenario(
+def execute_scenario(
     *,
     plan: Path,
     feature: str,
@@ -26,12 +26,12 @@ def run_scenario(
     lyrebird_url: str | None = None,
     mock_group: str | None = None,
     skip_assert_expected: bool = False,
-) -> None:
+) -> str:
+    """Run plan, write artifacts, L5 verify. Returns message; raises ValueError on verify failure."""
     if use_fakes:
         runner = ScenarioRunner(use_fakes=True)
         result = runner.run_plan_file(plan, feature=feature)
         write_run_artifacts(result, report_path=report_out, trace_path=trace_out)
-        model_backend = "fake"
     else:
         result, model_backend = asyncio.run(
             _run_on_device(
@@ -51,12 +51,42 @@ def run_scenario(
             trace_path=trace_out,
             model_backend=model_backend,
         )
+    verify_report(report_out, trace_out, plan)
+    return f"Wrote {report_out} and {trace_out}"
+
+
+def run_scenario(
+    *,
+    plan: Path,
+    feature: str,
+    report_out: Path,
+    trace_out: Path,
+    use_fakes: bool,
+    device_sn: str | None = None,
+    bundle: str | None = None,
+    mock_port: int | None = None,
+    lyrebird_url: str | None = None,
+    mock_group: str | None = None,
+    skip_assert_expected: bool = False,
+) -> None:
     try:
-        verify_report(report_out, trace_out, plan)
+        msg = execute_scenario(
+            plan=plan,
+            feature=feature,
+            report_out=report_out,
+            trace_out=trace_out,
+            use_fakes=use_fakes,
+            device_sn=device_sn,
+            bundle=bundle,
+            mock_port=mock_port,
+            lyrebird_url=lyrebird_url,
+            mock_group=mock_group,
+            skip_assert_expected=skip_assert_expected,
+        )
     except ValueError as exc:
         typer.secho(f"verify_report failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
-    typer.echo(f"Wrote {report_out} and {trace_out}")
+    typer.echo(msg)
 
 
 async def _run_on_device(
@@ -100,6 +130,16 @@ async def _run_on_device(
         await agent.aclose()
 
 
+def execute_report_verify(
+    *,
+    report: Path,
+    trace: Path,
+    plan: Path,
+) -> None:
+    """Raises ValueError when contracts fail."""
+    verify_report(report, trace, plan)
+
+
 def run_report_verify(
     *,
     report: Path,
@@ -107,7 +147,7 @@ def run_report_verify(
     plan: Path,
 ) -> None:
     try:
-        verify_report(report, trace, plan)
+        execute_report_verify(report=report, trace=trace, plan=plan)
     except ValueError as exc:
         typer.secho(f"verify_report failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc

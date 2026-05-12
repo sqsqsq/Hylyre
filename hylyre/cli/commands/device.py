@@ -13,6 +13,15 @@ from hylyre.drivers.hypium import hdc_cli
 console = Console()
 
 
+def format_device_list_text() -> str:
+    """hdc targets as plain lines (MCP / scripting). Raises HdcNotFoundError, HdcError."""
+    targets = hdc_cli.list_targets()
+    if not targets:
+        return "No devices reported by hdc."
+    lines = ["hdc targets:", *(f"  {i}. {t}" for i, t in enumerate(targets, start=1))]
+    return "\n".join(lines)
+
+
 def run_device_list() -> None:
     try:
         targets = hdc_cli.list_targets()

@@ -112,6 +112,20 @@ def run_mock_activate(group_id: str, base_url: Optional[str]) -> None:
     asyncio.run(_go())
 
 
+def execute_mock_activate(group_id: str, base_url: Optional[str]) -> str:
+    """Activate Lyrebird mock group; raises on HTTP/runtime errors."""
+
+    async def _go() -> None:
+        ctrl = LyrebirdController(base_url=_base_url(base_url))
+        try:
+            await ctrl.activate_group(group_id)
+        finally:
+            await ctrl.aclose()
+
+    asyncio.run(_go())
+    return f"Activated group {group_id!r}"
+
+
 def run_mock_deactivate(base_url: Optional[str]) -> None:
     async def _go() -> None:
         ctrl = LyrebirdController(base_url=_base_url(base_url))

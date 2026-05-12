@@ -173,3 +173,51 @@ def run_ai_assert(*, device_sn: str | None, instruction: str) -> None:
     except Exception as e:  # pragma: no cover
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(code=1) from e
+
+
+def execute_ai_action(*, device_sn: str | None, instruction: str) -> str:
+    """VLM action; raises same exceptions as CLI path (no typer)."""
+
+    async def _run() -> None:
+        async def _go(agent: Any) -> None:
+            await agent.ai_action(instruction)
+
+        await _with_hypium_agent(device_sn, _go)
+
+    asyncio.run(_run())
+    return "ok"
+
+
+def execute_ai_query(
+    *, device_sn: str | None, instruction: str, schema: str
+) -> str:
+    st = schema.lower().strip()
+    py_schema: type | None = None
+    if st == "number":
+        py_schema = float
+    elif st == "boolean":
+        py_schema = bool
+    elif st == "string":
+        py_schema = str
+
+    out_box: list[Any] = []
+
+    async def _run() -> None:
+        async def _go(agent: Any) -> None:
+            out_box.append(await agent.ai_query(instruction, schema=py_schema))
+
+        await _with_hypium_agent(device_sn, _go)
+
+    asyncio.run(_run())
+    return str(out_box[0])
+
+
+def execute_ai_assert(*, device_sn: str | None, instruction: str) -> str:
+    async def _run() -> None:
+        async def _go(agent: Any) -> None:
+            await agent.ai_assert(instruction)
+
+        await _with_hypium_agent(device_sn, _go)
+
+    asyncio.run(_run())
+    return "ok"

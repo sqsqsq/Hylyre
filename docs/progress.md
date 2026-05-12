@@ -55,6 +55,12 @@
 - **OpenSpec**：`openspec/changes/archive/2026-05-12-add-scenario-runner/`（tasks 全勾选）；稳态 **`openspec/specs/scenario-runner/spec.md`**。
 - **验证**：`python -m pytest` 全绿（128）。
 
+## 2026-05-12 · P5 MCP（mcp-wrapper）
+
+- **交付**：`hylyre mcp serve`（stdio，`--show-banner` 可选）、`hylyre/mcp/server.py` 注册 8 个 tool；与 CLI 共用 `run_cmd.execute_scenario` / `execute_report_verify`、`doctor`/`device`/`ai`/`mock` 的 `execute_*` 或纯文本封装。
+- **依赖**：`pyproject` 中 `[mcp]` 仍为 `fastmcp`；**`dev`** 额外加入 `fastmcp` 以便 CI 跑 `tests/unit/test_mcp_server.py`。
+- **验证**：`python -m pytest` 全绿（含 FastMCP `Client` 内嵌调用与 fake `hylyre_run_plan` + `hylyre_report_verify`）。
+
 ## 2026-05-12 · L5 mini-harness 与 `docs/plan.md` §7.5 对齐（补严）
 
 - **契约**：`report-sections.yaml` 增加 `pass_rate_required_tiers`、`pass_rate_overall_label`；L5 校验分级通过率、缺陷清单、结论段（含 `outcome` / `n/m`）、`trace.json` `outcome` 与执行表一致。
