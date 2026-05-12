@@ -18,7 +18,7 @@ async def test_mcp_tool_inventory() -> None:
     mcp = build_mcp()
     tools = await mcp.list_tools()
     names = {t.name for t in tools}
-    assert len(names) == 8
+    assert len(names) == 9
     expected = {
         "hylyre_run_plan",
         "hylyre_report_verify",
@@ -28,6 +28,7 @@ async def test_mcp_tool_inventory() -> None:
         "hylyre_ai_query",
         "hylyre_ai_assert",
         "hylyre_mock_activate",
+        "hylyre_progress_show",
     }
     assert names == expected
     desc_lens = [len((t.description or "")) for t in tools]
@@ -81,3 +82,22 @@ async def test_mcp_run_plan_matches_cli_fake_pipeline(tmp_path: Path) -> None:
             },
         )
         assert "Contracts OK" in v.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_mcp_progress_show_returns_path(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "hylyre"\n', encoding="utf-8"
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "progress.md").write_text("# hi\nline2\n", encoding="utf-8")
+    mcp = build_mcp()
+    async with Client(mcp) as client:
+        result = await client.call_tool(
+            "hylyre_progress_show",
+            {"tail_lines": 10},
+        )
+    text = result.content[0].text
+    assert "progress.md" in text
+    assert "line2" in text

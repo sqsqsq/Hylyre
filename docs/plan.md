@@ -21,7 +21,7 @@
 - [x] **P2b** Mock 工具链**引导安装（首版）**：**`hylyre bootstrap mock`**（可选 **`--install`** → 当前解释器 `pip install mitmproxy lyrebird`）+ 与 **`doctor` 同源的 mitmproxy / lyrebird 子集表格**；仍建议本仓开发用 **`pip install -e '.[mock]'`**。仓库级 **`scripts/bootstrap_mock.{sh,bat,ps1}`** 已提供（转发 `hylyre bootstrap mock`）。**Windows** / **Docker** 回退仍走文档与 `doctor`，不静默装系统依赖。
 - [x] **P3** 外层 HylyreAgent：`HylyreAgent` + Midscene 风格 `ai_action` / `ai_query` / `ai_assert` / `ai_tap` / `ai_input` / `ai_wait_for` / `ai_locate`（VLM 走 `HYLYRE_VLM_*`；单测 `FakeVlmClient`）；**增量**：`run_planned_action` / `run_planned_tap` / `run_planned_input` + `interpret_query_payload` / `interpret_assert_payload`，供调用方自备模型时对 VLM 同形 JSON 落盘，无需配置 `HYLYRE_VLM_*`。OpenSpec **`add-api-agent`** 已归档至 `openspec/changes/archive/2026-05-11-add-api-agent/`（`openspec/specs/api-agent/spec.md` 已跟进该能力）。
 - [x] **P4** ScenarioRunner + Reporter：`hylyre run`（`--use-fakes` / 真机 `run_plan_on_agent`、`--bundle` / Lyrebird `--mock-group`）、JSON 或 NL 测试步骤（NL 需 `HYLYRE_VLM_*`）、`test-report.md`+`trace.json`（`0.2-p4`、`tool_calls`）、`hylyre report verify`、fixture 与 OpenSpec **`add-scenario-runner`** 已归档至 `openspec/changes/archive/2026-05-12-add-scenario-runner/`
-- [x] **P5** 薄 MCP wrapper：`hylyre mcp serve`（FastMCP stdio）、8 个原子 tool 与 CLI 同源实现、`tests/unit/test_mcp_server.py`；可选 `hylyre[mcp]`；规约 **`openspec/specs/mcp-wrapper/spec.md`**
+- [x] **P5** 薄 MCP wrapper：`hylyre mcp serve`（FastMCP stdio）、**9** 个原子 tool 与 CLI 同源实现、`tests/unit/test_mcp_server.py`；可选 `hylyre[mcp]`；规约 **`openspec/specs/mcp-wrapper/spec.md`**
 - [ ] **P6** 反哺 Skill 6（遗留待评审）：选 SimulatedWalletForHmos 真实 feature 做端到端回归 + 给 framework/ 提 PR
 
 > **并行债与主线**：**设备 MITM 证书 hdc 首版**（`mock push-ca` + `cert-bootstrap` spec）**已交付并归档**；**P2b**（mock 工具链 `bootstrap`，pip 优先）为**体验增强**，可在 **P4 开发间隙或 P4 之后**做，**不作为 P4 退出条件**。（历史：曾与 P4 并行推进。）
@@ -38,7 +38,7 @@
 - **VLM 厂商 / endpoint**：P3 阶段再定，先用环境变量 `HYLYRE_VLM_ENDPOINT` / `HYLYRE_VLM_API_KEY` / `HYLYRE_VLM_MODEL` 占位，不绑厂商。**可选**：调用方不设上述变量，自行对 `agent.ui.screenshot()` 等做理解与 JSON 规划，用 `run_planned_*` / `interpret_*` 与 Hylyre 对接（CLI `hylyre ai` 仍依赖内置 VLM 路径）。
 - **P4 端到端验证 feature**：遗留问题。P0–P3 全部完成后，依据彼时 SimulatedWalletForHmos 的 `doc/features/` 实际状态再选；先用本仓 `tests/e2e/fixtures/` 下的 mock test-plan.md 跑 schema 闭环。
 - **自测试为一等公民（新增）**：Hylyre 不依赖任何外部仓做质量门禁。从 P0 起就铺设五层自测试金字塔（L1 单元 / L2 ABC 契约 + fakes / L3 集成测试 + fake sidecar / L4 自有 schema 自校验 / L5 自托管 mini-harness），与每个阶段同步生长，作为对应 OpenSpec change 的硬性退出条件。详见第 7.5 节。
-- **输出契约 SSOT 归属（新增）**：Hylyre 输出格式（`test-report.md` 章节、`trace.json` 字段）的 SSOT **在 Hylyre 仓内** `hylyre/contracts/`。L4 自校验跑这套自有 schema。另起一个**软提醒级**的兼容性 CI：拉 framework 仓的 schema 做差异对比，失败时自动在 `docs/progress.md` 添一条「framework schema drift 待评估」，**不阻塞主 CI、不阻塞发布**。Hylyre 与 framework 之间只单向输出，永不反向引用，避免循环依赖。
+- **输出契约 SSOT 归属（新增）**：Hylyre 输出格式（`test-report.md` 章节、`trace.json` 字段）的 **SSOT** **在 Hylyre 仓内** `hylyre/contracts/`。L4 自校验跑这套自有 schema。另起一个**软提醒级**的兼容性 CI（`compat-framework.yml` + `scripts/check_framework_schema.py`）：与 consumer `trace.schema.json` 做软比对，漂移时 **stderr 告警**并 **可** 在 `docs/progress.md` **追加**去重记录（详见 §5.2），**不阻塞主 CI、不阻塞发布**。Hylyre 与 framework 之间只单向输出，永不反向引用，避免循环依赖。
 - **Mock 工具链自动化（新增）**：若提供一键/半自动安装，**默认与优选路径为 pip**（`hylyre[mock]`、mitmproxy）；**不**把 Windows 原生 Lyrebird 的系统前置（OpenSSL/MSVC）或 Docker 作为默认静默安装目标，仅作文档化回退与 `doctor`/bootstrap 失败时的指引。
 
 ---
@@ -148,7 +148,7 @@ Hylyre/
 │   └── e2e/                           # 真机/模拟器（CI 默认跳过，需打 marker）
 └── .github/workflows/
     ├── ci.yml                         # L1+L2+L3+L4 必跑
-    └── compat-framework.yml           # 软提醒：拉 framework schema 比对，失败仅 warning + progress.md 追加
+    └── compat-framework.yml           # 软提醒：check_framework_schema.py；可追加 docs/progress.md（去重）
 ```
 
 `docs/progress.md` 与 `openspec/changes/` 并存：前者人类叙事时间线（决策、踩坑），后者机器可读规约 delta（面向 AI），互不重复。
@@ -190,33 +190,40 @@ await agent.ai_input(by_id="amount", value="100")
 ### 3.2 CLI 形态（SSOT）
 
 ```bash
-# 真机测试主流程：吃 test-plan.md，吐 test-report.md + trace.json
+# 测试计划 → test-report.md + trace.json（末尾内置 L5 verify）
+# CI / 离线桩：加 --use-fakes；真机：省略 --use-fakes，并准备 hylyre[device] + 设备连接
 hylyre run \
   --feature wallet-recharge \
   --plan doc/features/wallet-recharge/test-plan.md \
-  --device-sn ABCD1234 \
-  --bundle com.example.wallet \
-  --mock-data doc/features/wallet-recharge/mock-data \
   --report-out doc/features/wallet-recharge/test-report.md \
-  --trace-out framework/harness/reports/wallet-recharge/testing/trace.json
+  --trace-out framework/harness/reports/wallet-recharge/testing/trace.json \
+  --use-fakes
+# 真机可选：--device-sn / --bundle / --mock-port / --lyrebird-url / --mock-group /
+#          --skip-assert-expected / --model-backend
 
-# 设备 / Mock 单独操作
+# 设备（HDC）
 hylyre device list
-hylyre device install --hap path/to/app.hap
-hylyre mock start --port 9090 --data ./mock-data
-hylyre mock activate checkout-success
-hylyre mock capture --output ./captured.har
+hylyre device list --first
+hylyre device install path/to/app.hap [--serial SN|-t SN]
 
-# 单步 AI 命令（调试 / AI 协作）
-hylyre ai action "点击充值按钮" --device-sn ABCD1234
-hylyre ai query "当前余额" --schema number
-hylyre ai assert "弹出充值成功 Toast"
+# Mock / Lyrebird
+hylyre mock start --mock-port 9090 [--data ./mock-data] [--pid-file PATH]
+hylyre mock activate <group-uuid> [--url http://127.0.0.1:9090]
+hylyre mock capture --output ./flows.json [--url ...] [--full]
+# 证书：hylyre mock cert | hylyre mock push-ca
 
-# 进度 / OpenSpec 联动
-hylyre progress show
+# 单步 AI（自然语言需 HYLYRE_VLM_* 与 hylyre[device]）
+hylyre ai action "点击充值" [--device-sn SN]
+hylyre ai query "当前余额" [--schema string|number|boolean] [--device-sn SN]
+hylyre ai assert "弹出 Toast" [--device-sn SN]
+
+# 进度 / OpenSpec（仓库根由向上查找 pyproject.toml[name=hylyre] 解析）
+hylyre progress show [--tail N]
+hylyre progress append -m "…" [--title "…"]
+hylyre progress path
 hylyre spec list
 
-# 自校验门禁（L5 mini-harness）— 既给 hylyre run 内置调用，也可独立使用
+# L5 门禁（亦可由 hylyre run 末尾自动调用）
 hylyre report verify \
   --report doc/features/wallet-recharge/test-report.md \
   --trace framework/harness/reports/wallet-recharge/testing/trace.json \
@@ -226,10 +233,10 @@ hylyre report verify \
 ### 3.3 MCP wrapper（按需启动）
 
 ```bash
-hylyre mcp serve --transport stdio
+hylyre mcp serve [--transport stdio] [--show-banner]
 ```
 
-**严格只暴露 5–8 个高频原子工具**（`hylyre_run_plan` / `hylyre_ai_action` / `hylyre_ai_query` / `hylyre_ai_assert` / `hylyre_mock_activate` / `hylyre_device_list` / `hylyre_progress_show`），刻意不导出 SDK 全部 30+ 方法，控制 schema 注入开销 < 5k tokens。CI 加 token 计数 lint。
+**精选 ≤9 个原子工具**（与 CLI 同源实现）：`hylyre_run_plan` / `hylyre_report_verify` / `hylyre_device_list` / `hylyre_doctor` / `hylyre_ai_action` / `hylyre_ai_query` / `hylyre_ai_assert` / `hylyre_mock_activate` / `hylyre_progress_show`。控制 schema 注入；CI 对描述做约 500「词」的启发式上限。
 
 ---
 
@@ -286,7 +293,7 @@ Hylyre 的「正确性」由 **Hylyre 自有的 L4+L5 自测试** 保证（详�
 - **test-report.md** 必须含 `测试概览 / 测试执行结果（表格，状态 ∈ {通过,失败,阻塞,跳过}）/ 缺陷清单 / 通过率统计（P0/P1/P2 各通过率 + 总体）/ 结论（达标 | 有条件达标 | 不达标）`
 - **trace.json** 必须满足：`phase = "testing"`、`outcome ∈ {success, partial, failed, aborted}`、`tool_calls` / `retries` / `artifacts` 由 Hylyre 运行时自动记录、`model_backend` 由 host 注入（CLI 接受 `--model-backend`）
 
-framework 仓的 `trace.schema.json` 与 `testing-rules.yaml` 当前是兼容的事实标准，但 **不是 Hylyre 的 SSOT**。CI `compat-framework.yml` 拉 framework schema 做一次差异断言，发现漂移**只**在 `docs/progress.md` 自动追加一条「framework schema drift 待评估」，**不阻塞主 CI / 不阻塞发布**——是否调整 Hylyre SSOT 由人评估后决定。
+framework 仓的 `trace.schema.json` 与 `testing-rules.yaml` 当前是兼容的事实标准，但 **不是 Hylyre 的 SSOT**。CI **`compat-framework.yml`** 执行 **`scripts/check_framework_schema.py`**：拉 consumer `trace.schema.json` 与本地 `output-schema.json` 做顶层字段软比对；**缺失时 stderr 告警**，并在 CI 内 **`pip install -e .` 后**尝试 **`docs/progress.md` 追加一条漂移记录**（同签名近尾部去重；可用 **`--no-append-progress`** 仅告警不写字）。**不阻塞主 CI / 不阻塞发布**——是否调整 Hylyre SSOT 由人评估后决定。
 
 ### 5.3 调用方式
 
@@ -320,7 +327,7 @@ cd framework/harness && npx ts-node harness-runner.ts \
 - **P2b · Mock 工具链自动化（pip 优先）** — `hylyre bootstrap mock` 与 **`scripts/bootstrap_mock.{sh,bat,ps1}`**（仓库根 `PYTHONPATH` + 转发 CLI）：默认 **`pip install 'hylyre[mock]'`** + mitmproxy 安装/校验；成功后与 **`doctor` 共享检测逻辑**；Windows OpenSSL/MSVC、Docker 仅文档与失败回退（不默认静默系统安装）→ change 待定（如 `add-toolchain-bootstrap-mock`）
 - **P3 · 外层 Agent + AI 动词** — `HylyreAgent` + `ai_action / ai_query / ai_assert / …`（VLM 经 `HYLYRE_VLM_*`；`HttpVlmClient` + `FakeVlmClient`）+ `run_planned_*` / `interpret_*`（外部规划器、无 VLM）— **配套**：L1 单测，CI 不依赖真实模型 → change `add-api-agent`（**已归档** `archive/2026-05-11-add-api-agent`）；规约见 `openspec/specs/api-agent/spec.md`
 - **P4 · ScenarioRunner + Reporter + L5 mini-harness 上线** — 解析 test-plan.md → 串联 UI + mock → 出 test-report.md + trace.json；**L4 自有 schema 全量校验**；**L5 `hylyre report verify` 实现**并作为 `hylyre run` 的内置最后一步（自我门禁）；本仓 `tests/e2e/fixtures/mock-test-plan.md` 端到端跑通完整闭环，**完全不需要 framework 仓在线** → change `add-scenario-runner`
-- **P5 · MCP wrapper** — FastMCP 封 5–8 原子 tool；与 CLI 共享业务实现 — **配套**：tool 描述长度 lint < 500 tokens / 个；MCP 与 CLI 行为一致性 contract test（同一动作两条路径产物等价） → change `add-mcp-wrapper`
+- **P5 · MCP wrapper** — FastMCP 封 **≤9** 原子 tool；与 CLI 共享业务实现 — **配套**：tool 描述长度 lint（约 500 词上限/工具，启发式）；MCP 与 CLI 行为一致性 contract test（同一动作两条路径产物等价） → change `add-mcp-wrapper`
 - **P6 · 反哺 Skill 6（遗留待评审）** — 等 P0–P5 完成后回头看：① 选 SimulatedWalletForHmos 中的一个真实 feature 做端到端真机回归；② 给 framework/ 提 PR 让 Skill 6 SKILL.md Step 5 标注「优先用 Hylyre 自动化」（在 framework repo 而非本 repo）
 
 ---
@@ -331,9 +338,9 @@ cd framework/harness && npx ts-node harness-runner.ts \
 - **Lyrebird 依赖 mitmproxy 证书；HarmonyOS 设备证书信任非交互** → P2 单独立项 `add-cert-bootstrap`；优先 hdc push + bm install 自动化；不行就 doctor 引导
 - **Mock 工具链步骤多、易装失败**（新增） → **P2b**：自动化安装命令 **优选 pip**（`hylyre[mock]` + mitmproxy）；bootstrap 后 **`doctor` 复检**；Windows（`LIB`/`INCLUDE`、MSVC）、Docker 仅 **README + Lyrebird 官方说明** 中的回退路径，不默认静默装系统依赖
 - **AI 动词需 VLM；本地无模型时退化** → 默认走结构化 API（`ai_tap(by_id=...)`），仅显式传 `instruction=...` 才调 VLM；endpoint 走环境变量、不绑厂商
-- **MCP schema 膨胀回到老问题** → 强制 ≤ 8 tool，每个描述 < 500 tokens；CI 加 token 计数 lint
+- **MCP schema 膨胀回到老问题** → 强制 ≤ 9 个 tool，每个描述 < 500 tokens（CI 启发式词数）；MCP 与 CLI 行为一致性见 contract test
 - **OpenSpec 与 Skill 6 framework SDD 双源** → 明确分工：OpenSpec 管「Hylyre 自身」spec；framework 管「使用 Hylyre 的业务工程」spec；互不干涉
-- **framework 仓 schema 漂移导致 Skill 6 接不上**（新增） → `compat-framework.yml` 软提醒 CI 持续监测；漂移时自动写 `docs/progress.md`，由人决定是否调整 Hylyre SSOT；**绝不**让 framework 漂移阻塞 Hylyre 主线交付
+- **framework 仓 schema 漂移导致 Skill 6 接不上**（新增） → `compat-framework.yml` 软提醒；`check_framework_schema.py` **可**自动追加 `docs/progress.md`（去重），由人决定是否调整 Hylyre SSOT；**绝不**让 framework 漂移阻塞 Hylyre 主线交付
 
 ---
 
@@ -348,7 +355,7 @@ cd framework/harness && npx ts-node harness-runner.ts \
 | L3 | 集成测试（fake sidecar） | 外层串内层，但内层用 fake；HTTP 用 `respx` 拦截 | `pytest` + `respx` + 内置 fakes | P1 起 | 必跑、阻塞 |
 | L4 | 自有 schema 自校验 | `hylyre/contracts/output-schema.json` + `report-sections.yaml` 校验 Hylyre 自己的输出 | `jsonschema` + 自写 markdown lint | P0 占位、P4 全量 | 必跑、阻塞 |
 | L5 | 自托管 mini-harness | 模拟 Skill 6 的 `check-testing.ts` 关键检查（章节、表格、状态值域、AC 追溯、计划-报告一致性） | `hylyre/harness/`（暴露 `hylyre report verify`） | P0 包目录、P4 实质 | 必跑、阻塞；**也作为 `hylyre run` 内置门禁** |
-| -- | 兼容性照镜（不算正式层） | 与 framework 仓 schema 比对 | `compat-framework.yml` | P0 workflow 文件就绪、P4 启用 | **软提醒，不阻塞**；失败自动写 progress.md |
+| -- | 兼容性照镜（不算正式层） | 与 framework 仓 schema 比对 | `compat-framework.yml` + `scripts/check_framework_schema.py` | P0 workflow 就绪、P4+ 软检查 | **软提醒，不阻塞**；漂移时 **可** 自动追加 `docs/progress.md`（去重于尾部窗口） |
 
 **fakes 清单**（`tests/contract/fakes/`）：
 

@@ -10,6 +10,7 @@ def build_mcp():  # type: ignore[no-untyped-def]
     from fastmcp import FastMCP
 
     from hylyre.cli.commands import ai_cmd, device, doctor, mock_cmd, run_cmd
+    from hylyre.progress import store as progress_store
 
     mcp = FastMCP(
         name="hylyre",
@@ -126,6 +127,13 @@ def build_mcp():  # type: ignore[no-untyped-def]
         lyrebird_url: str | None = None,
     ) -> str:
         return mock_cmd.execute_mock_activate(group_id, lyrebird_url)
+
+    @mcp.tool(
+        name="hylyre_progress_show",
+        description="Tail of docs/progress.md from repo root (cwd). Default last 120 lines.",
+    )
+    def hylyre_progress_show(tail_lines: int = 120) -> str:
+        return progress_store.format_progress_excerpt(tail_lines=tail_lines)
 
     return mcp
 
