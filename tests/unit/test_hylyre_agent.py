@@ -122,6 +122,42 @@ async def test_ai_query_coerce() -> None:
 
 
 @pytest.mark.asyncio
+async def test_ai_string_helper() -> None:
+    ui = FakeUiDriver()
+    vlm = FakeVlmClient(responses=[{"answer": "hello", "dtype": "string"}])
+    ag = HylyreAgent(ui=ui, vlm=vlm)
+    try:
+        v = await ag.ai_string("title?")
+    finally:
+        await ag.aclose()
+    assert v == "hello"
+
+
+@pytest.mark.asyncio
+async def test_ai_number_helper() -> None:
+    ui = FakeUiDriver()
+    vlm = FakeVlmClient(responses=[{"answer": "42", "dtype": "number"}])
+    ag = HylyreAgent(ui=ui, vlm=vlm)
+    try:
+        v = await ag.ai_number("count?")
+    finally:
+        await ag.aclose()
+    assert v == 42.0
+
+
+@pytest.mark.asyncio
+async def test_ai_boolean_helper() -> None:
+    ui = FakeUiDriver()
+    vlm = FakeVlmClient(responses=[{"answer": True, "dtype": "boolean"}])
+    ag = HylyreAgent(ui=ui, vlm=vlm)
+    try:
+        v = await ag.ai_boolean("logged in?")
+    finally:
+        await ag.aclose()
+    assert v is True
+
+
+@pytest.mark.asyncio
 async def test_ai_assert_ok() -> None:
     ui = FakeUiDriver()
     vlm = FakeVlmClient(responses=[{"ok": True, "reason": ""}])

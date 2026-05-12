@@ -19,7 +19,7 @@
 - [x] **P1** Hypium 内层：HypiumDriver 实现 connect/start_app/touch/input/screenshot，冻结 UiDriverBase ABC（+ L1 单测 + L2 FakeUiDriver 契约测试 + L3 集成测试覆盖率 ≥ 70%）；OpenSpec `add-driver-hypium` 已归档
 - [x] **P2** Lyrebird 内层：`LyrebirdController` + `hylyre mock *` + `FakeMockController` + respx/L1–L3；**设备 MITM 证书自动化**拆至 OpenSpec **`add-cert-bootstrap`**（与 §7 风险项一致）。细粒度勾选见 `openspec/changes/archive/2026-05-11-add-driver-lyrebird/tasks.md`（已归档）。
 - [x] **P2b** Mock 工具链**引导安装（首版）**：**`hylyre bootstrap mock`**（可选 **`--install`** → 当前解释器 `pip install mitmproxy lyrebird`）+ 与 **`doctor` 同源的 mitmproxy / lyrebird 子集表格**；仍建议本仓开发用 **`pip install -e '.[mock]'`**。仓库级 **`scripts/bootstrap_mock.{sh,bat,ps1}`** 已提供（转发 `hylyre bootstrap mock`）。**Windows** / **Docker** 回退仍走文档与 `doctor`，不静默装系统依赖。
-- [x] **P3** 外层 HylyreAgent：`HylyreAgent` + Midscene 风格 `ai_action` / `ai_query` / `ai_assert` / `ai_tap` / `ai_input` / `ai_wait_for` / `ai_locate`（VLM 走 `HYLYRE_VLM_*`；单测 `FakeVlmClient`）；**增量**：`run_planned_action` / `run_planned_tap` / `run_planned_input` + `interpret_query_payload` / `interpret_assert_payload`，供调用方自备模型时对 VLM 同形 JSON 落盘，无需配置 `HYLYRE_VLM_*`。OpenSpec **`add-api-agent`** 已归档至 `openspec/changes/archive/2026-05-11-add-api-agent/`（`openspec/specs/api-agent/spec.md` 已跟进该能力）。
+- [x] **P3** 外层 HylyreAgent：`HylyreAgent` + Midscene 风格 `ai_action` / `ai_query` / `ai_string` / `ai_number` / `ai_boolean` / `ai_assert` / `ai_tap` / `ai_input` / `ai_wait_for` / `ai_locate`（VLM 走 `HYLYRE_VLM_*`；单测 `FakeVlmClient`）；**增量**：`run_planned_action` / `run_planned_tap` / `run_planned_input` + `interpret_query_payload` / `interpret_assert_payload`，供调用方自备模型时对 VLM 同形 JSON 落盘，无需配置 `HYLYRE_VLM_*`。OpenSpec **`add-api-agent`** 已归档至 `openspec/changes/archive/2026-05-11-add-api-agent/`（`openspec/specs/api-agent/spec.md` 已跟进该能力）。
 - [x] **P4** ScenarioRunner + Reporter：`hylyre run`（`--use-fakes` / 真机 `run_plan_on_agent`、`--bundle` / Lyrebird `--mock-group`）、JSON 或 NL 测试步骤（NL 需 `HYLYRE_VLM_*`）、`test-report.md`+`trace.json`（`0.2-p4`、`tool_calls`）、`hylyre report verify`、fixture 与 OpenSpec **`add-scenario-runner`** 已归档至 `openspec/changes/archive/2026-05-12-add-scenario-runner/`
 - [x] **P5** 薄 MCP wrapper：`hylyre mcp serve`（FastMCP stdio）、**9** 个原子 tool 与 CLI 同源实现、`tests/unit/test_mcp_server.py`；可选 `hylyre[mcp]`；规约 **`openspec/specs/mcp-wrapper/spec.md`**
 - [ ] **P6** 反哺 Skill 6（遗留待评审）：选 SimulatedWalletForHmos 真实 feature 做端到端回归 + 给 framework/ 提 PR
@@ -32,7 +32,7 @@
 
 - **实现语言**：Python 3.10+ 主体。Hypium / Lyrebird 都只有 Python SDK；TS 主体需 subprocess 包 Python，IPC 不稳且复杂度 ~1.5x。Skill 6 的 `framework/harness`（TS）只需 shell 调 Hylyre CLI，零侵入。
 - **对外形态**：CLI 优先 + 薄 MCP wrapper（双轨）。2026 业界共识——CLI 单命令 ~200 tokens，MCP 多 server 加载 30k–55k tokens；Skill 6 是 6 阶段长链任务上下文极敏感，主路径走 CLI；MCP 作为 host 兼容层（Cursor / Claude Desktop）按需启用。同时为 Code Mode 留口子（直接 import SDK）。
-- **对外 API 风格**：Midscene 同名动词 Python 化—`agent.ai_action / ai_query / ai_assert / ai_tap / ai_input / ai_wait_for / ai_locate`。
+- **对外 API 风格**：Midscene 同名动词 Python 化—`agent.ai_action / ai_query / ai_string / ai_number / ai_boolean / ai_assert / ai_tap / ai_input / ai_wait_for / ai_locate`。
 - **SDD 框架**：OpenSpec（`@fission-ai/openspec`），36k+ stars、specs 落盘 `openspec/`、原生支持 25+ AI agent，正是用户要求的「持久化进度说明书」。**P0 阶段必须跑完 `openspec init`**（包含 Node 20.19+ 环境检测；不满足则在 doctor 中给出清晰修复指引并阻断 P0 完成）。
 - **Skill 6 集成**：Hylyre 作为执行器（与 framework 解耦）。`hylyre run --plan ... --feature ...` 产出符合 [testing-rules.yaml](https://raw.githubusercontent.com/sqsqsq/SimulatedWalletForHmos/main/framework/specs/phase-rules/testing-rules.yaml) 的 `test-report.md` 与符合 [trace.schema.json](https://raw.githubusercontent.com/sqsqsq/SimulatedWalletForHmos/main/framework/harness/trace/trace.schema.json) 的 `trace.json`。
 - **VLM 厂商 / endpoint**：P3 阶段再定，先用环境变量 `HYLYRE_VLM_ENDPOINT` / `HYLYRE_VLM_API_KEY` / `HYLYRE_VLM_MODEL` 占位，不绑厂商。**可选**：调用方不设上述变量，自行对 `agent.ui.screenshot()` 等做理解与 JSON 规划，用 `run_planned_*` / `interpret_*` 与 Hylyre 对接（CLI `hylyre ai` 仍依赖内置 VLM 路径）。
@@ -54,7 +54,7 @@ flowchart TB
     end
 
     subgraph facade [对外接口层 hylyre/api/]
-        agent["HylyreAgent<br/>ai_action / ai_query / ai_assert<br/>ai_tap / ai_input / ai_wait_for"]
+        agent["HylyreAgent<br/>ai_action / ai_query / ai_assert<br/>ai_tap / ai_input / ai_string… / ai_wait_for"]
         scenario["ScenarioRunner<br/>解析 test-plan.md<br/>编排 mock+UI"]
         reporter["Reporter<br/>产出 test-report.md<br/>+ trace.json"]
     end
@@ -160,24 +160,22 @@ Hylyre/
 ### 3.1 SDK 形态
 
 ```python
-from hylyre import HylyreAgent
+from hylyre.wiring import create_hypium_agent_with_env_vlm
 
-agent = HylyreAgent(
+agent = create_hypium_agent_with_env_vlm(
     device_sn="ABCD1234",
-    bundle_name="com.example.app",
-    mock={
-        "lyrebird_port": 9090,
-        "data_root": "./mock-data",
-        "active_group": "checkout-success",
-    },
+    mock_port=9090,  # 可选：Lyrebird HTTP API 端口；或等价地传 lyrebird_base_url=
 )
-
-await agent.start_app()
-await agent.ai_action("点击首页底部 Tab 栏第二个图标，进入'我的'页面")
-balance = await agent.ai_query("当前余额数值是多少？", schema=float)
-await agent.ai_assert("页面顶部显示用户头像和昵称")
-await agent.ai_tap(by_text="充值")
-await agent.ai_input(by_id="amount", value="100")
+try:
+    await agent.start_app("com.example.app")
+    await agent.mock_activate_group("checkout-success")  # 需配置 mock=
+    await agent.ai_action("点击首页底部 Tab 栏第二个图标，进入'我的'页面")
+    balance = await agent.ai_number("当前余额数值是多少？")
+    await agent.ai_assert("页面顶部显示用户头像和昵称")
+    await agent.ai_tap(by_text="充值")
+    await agent.ai_input("100", by_id="amount")
+finally:
+    await agent.aclose()
 ```
 
 核心方法（与 [Midscene API](https://midscenejs.com/api) 对齐）：

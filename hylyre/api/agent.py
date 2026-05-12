@@ -285,6 +285,18 @@ class HylyreAgent:
         )
         return self.interpret_query_payload(raw, schema=schema)
 
+    async def ai_string(self, instruction: str) -> str:
+        out = await self.ai_query(instruction, schema=str)
+        return str(out)
+
+    async def ai_number(self, instruction: str) -> float:
+        out = await self.ai_query(instruction, schema=float)
+        return float(out)
+
+    async def ai_boolean(self, instruction: str) -> bool:
+        out = await self.ai_query(instruction, schema=bool)
+        return bool(out)
+
     async def ai_assert(self, instruction: str) -> None:
         await self._ensure_ui()
         vlm = self._require_vlm()
