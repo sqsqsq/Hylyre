@@ -30,8 +30,10 @@ async def test_fake_ui_driver_records_events() -> None:
     await d.touch(x=10, y=20)
     await d.input_text("hello", by_text="field")
     png = await d.screenshot()
+    tree = await d.dump_ui()
     await d.close()
     assert png.startswith(b"\x89PNG")
+    assert tree.get("source") == "fake"
     kinds = [e[0] for e in d.events]
     assert kinds == [
         "connect",
@@ -39,5 +41,6 @@ async def test_fake_ui_driver_records_events() -> None:
         "touch",
         "input_text",
         "screenshot",
+        "dump_ui",
         "close",
     ]

@@ -56,6 +56,72 @@ async def _to_thread(fn: Callable[..., _T], /, *args: Any, **kwargs: Any) -> _T:
     return await asyncio.to_thread(fn, *args, **kwargs)
 
 
+def _validate_swipe_distance_pct(distance: int) -> int:
+    d = int(distance)
+    if d < 1 or d > 100:
+        raise ValueError("swipe distance must be an integer 1–100 (percent of swipe region)")
+    return d
+
+
+def _normalize_hypium_swipe_direction(direction: str) -> str:
+    d = direction.strip().upper()
+    if d not in {"UP", "DOWN", "LEFT", "RIGHT"}:
+        raise ValueError(
+            "swipe direction must be UP, DOWN, LEFT, or RIGHT "
+            f"(case-insensitive); got {direction!r}"
+        )
+    return d
+
+
+def _normalize_hypium_swipe_side(side: str | None) -> Any:
+    if side is None:
+        return None
+    from hypium.model.basic_data_type import UiParam
+
+    key = side.strip().upper()
+    mapping = {
+        "LEFT": UiParam.LEFT,
+        "RIGHT": UiParam.RIGHT,
+        "TOP": UiParam.TOP,
+        "BOTTOM": UiParam.BOTTOM,
+    }
+    if key not in mapping:
+        raise ValueError(
+            "swipe side must be LEFT, RIGHT, TOP, or BOTTOM "
+            f"(case-insensitive); got {side!r}"
+        )
+    return mapping[key]
+
+
+def _hypium_single_selector(shim: _HypiumShim, **kw: str | None) -> Any:
+    """At most one of by_text / by_id / by_type / by_key."""
+    by_text = kw.get("by_text")
+    by_id = kw.get("by_id")
+    by_type = kw.get("by_type")
+    by_key = kw.get("by_key")
+    opts = [
+        ("by_text", by_text),
+        ("by_id", by_id),
+        ("by_type", by_type),
+        ("by_key", by_key),
+    ]
+    present = [(name, val) for name, val in opts if val is not None]
+    if len(present) > 1:
+        raise ValueError(
+            "pass at most one of by_text, by_id, by_type, by_key for swipe area / scroll at"
+        )
+    if not present:
+        return None
+    name, val = present[0]
+    if name == "by_text":
+        return shim.BY.text(val)
+    if name == "by_id":
+        return shim.BY.id(val)
+    if name == "by_type":
+        return shim.BY.type(val)
+    return shim.BY.key(val)
+
+
 class HypiumDriver(UiDriverBase):
     def __init__(
         self,
@@ -182,6 +248,121 @@ class HypiumDriver(UiDriverBase):
             return await _to_thread(path.read_bytes)
         finally:
             path.unlink(missing_ok=True)
+
+    async def dump_ui(self) -> dict[str, Any]:
+        """Dump UI hierarchy via Hypium ``UiTree`` (device ``uitest dumpLayout``)."""
+        await self._require_raw()
+        raw = self._raw
+
+        def _sync_dump() -> dict[str, Any]:
+            uitree = raw.UiTree
+            uitree.refresh()
+            tree = uitree.tree
+            if tree is None:
+                raise RuntimeError("Hypium UiTree.refresh() produced no tree")
+            return {
+                "schema_version": "hylyre-hypium-ui-dump-v1",
+                "source": "hypium.UiTree",
+                "tree": tree,
+            }
+
+        return await _to_thread(_sync_dump)
+
+    async def swipe(
+        self,
+        *,
+        direction: str,
+        distance: int = 60,
+        area_by_text: str | None = None,
+        area_by_id: str | None = None,
+        area_by_type: str | None = None,
+        area_by_key: str | None = None,
+        side: str | None = None,
+        start_point: tuple[float | int, float | int] | None = None,
+        swipe_time: float = 0.3,
+        speed: int | None = None,
+    ) -> None:
+        await self._require_raw()
+        shim = load_hypium_shim()
+        raw = self._raw
+        dir_s = _normalize_hypium_swipe_direction(direction)
+        dist = _validate_swipe_distance_pct(distance)
+        area = _hypium_single_selector(
+            shim,
+            by_text=area_by_text,
+            by_id=area_by_id,
+            by_type=area_by_type,
+            by_key=area_by_key,
+        )
+        side_arg = _normalize_hypium_swipe_side(side)
+        sp: tuple[float, float] | None = None
+        if start_point is not None:
+            sp = (float(start_point[0]), float(start_point[1]))
+        wt = float(swipe_time)
+        spd = None if speed is None else int(speed)
+
+        def _go() -> None:
+            raw.swipe(dir_s, dist, area, side_arg, sp, wt, spd)
+
+        await _to_thread(_go)
+
+    async def mouse_scroll(
+        self,
+        *,
+        direction: str,
+        steps: int,
+        x: int | None = None,
+        y: int | None = None,
+        at_by_text: str | None = None,
+        at_by_id: str | None = None,
+        at_by_type: str | None = None,
+        at_by_key: str | None = None,
+        key1: int | None = None,
+        key2: int | None = None,
+    ) -> None:
+        await self._require_raw()
+        shim = load_hypium_shim()
+        raw = self._raw
+        from hypium.model.basic_data_type import UiParam
+
+        dl = direction.strip().lower()
+        if dl in ("up", "u"):
+            scroll_dir = UiParam.UP
+        elif dl in ("down", "d"):
+            scroll_dir = UiParam.DOWN
+        else:
+            raise ValueError(
+                "mouse_scroll direction must be up or down "
+                f"(case-insensitive); got {direction!r}"
+            )
+        st = int(steps)
+        if st < 1:
+            raise ValueError("mouse_scroll steps must be >= 1")
+
+        selector = _hypium_single_selector(
+            shim,
+            by_text=at_by_text,
+            by_id=at_by_id,
+            by_type=at_by_type,
+            by_key=at_by_key,
+        )
+        if selector is not None:
+            if x is not None or y is not None:
+                raise ValueError(
+                    "mouse_scroll: do not pass x/y together with at_by_* selectors"
+                )
+            pos: Any = selector
+        elif x is not None and y is not None:
+            pos = (int(x), int(y))
+        elif x is None and y is None:
+            pos = (0.5, 0.5)
+        else:
+            raise ValueError("mouse_scroll requires both x and y when using coordinates")
+
+        def _go() -> None:
+            raw.mouse_scroll(pos, scroll_dir, st, key1, key2)
+
+        await _to_thread(_go)
 
     async def install_app(self, hap_path: str | Path, **kwargs: Any) -> None:
         """Install a .hap from the host via Hypium (uses hdc under the hood)."""

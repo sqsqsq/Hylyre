@@ -75,6 +75,57 @@ class UiDriverBase(ABC):
         """Raster screenshot bytes (Hypium emits JPEG; fakes may use PNG)."""
         raise NotImplementedError
 
+    async def dump_ui(self) -> dict[str, Any]:
+        """Return a JSON-serializable UI hierarchy for external planners (no VLM).
+
+        Default: not implemented (Hypium / fakes override).
+        """
+        raise NotImplementedError(
+            "dump_ui is not implemented for this UiDriver"
+        )
+
+    async def swipe(
+        self,
+        *,
+        direction: str,
+        distance: int = 60,
+        area_by_text: str | None = None,
+        area_by_id: str | None = None,
+        area_by_type: str | None = None,
+        area_by_key: str | None = None,
+        side: str | None = None,
+        start_point: tuple[float | int, float | int] | None = None,
+        swipe_time: float = 0.3,
+        speed: int | None = None,
+    ) -> None:
+        """Directional swipe (Hypium ``UiDriver.swipe``).
+
+        Default: not implemented (Hypium / fakes override).
+        """
+        raise NotImplementedError("swipe is not implemented for this UiDriver")
+
+    async def mouse_scroll(
+        self,
+        *,
+        direction: str,
+        steps: int,
+        x: int | None = None,
+        y: int | None = None,
+        at_by_text: str | None = None,
+        at_by_id: str | None = None,
+        at_by_type: str | None = None,
+        at_by_key: str | None = None,
+        key1: int | None = None,
+        key2: int | None = None,
+    ) -> None:
+        """Mouse-wheel style scroll (Hypium ``mouse_scroll``); typically vertical ``up``/``down``.
+
+        Default: not implemented (Hypium / fakes override).
+        """
+        raise NotImplementedError(
+            "mouse_scroll is not implemented for this UiDriver"
+        )
+
     def _validate_touch_kwargs(
         self,
         *,

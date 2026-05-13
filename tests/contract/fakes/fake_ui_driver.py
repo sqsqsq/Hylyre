@@ -101,3 +101,75 @@ class FakeUiDriver(UiDriverBase):
             b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
             b"\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82"
         )
+
+    async def dump_ui(self) -> dict[str, Any]:
+        self.events.append(("dump_ui", {}))
+        return {
+            "schema_version": "hylyre-fake-ui-dump-v1",
+            "source": "fake",
+            "tree": {"type": "fake_root", "children": []},
+        }
+
+    async def swipe(
+        self,
+        *,
+        direction: str,
+        distance: int = 60,
+        area_by_text: str | None = None,
+        area_by_id: str | None = None,
+        area_by_type: str | None = None,
+        area_by_key: str | None = None,
+        side: str | None = None,
+        start_point: tuple[float | int, float | int] | None = None,
+        swipe_time: float = 0.3,
+        speed: int | None = None,
+    ) -> None:
+        self.events.append(
+            (
+                "swipe",
+                {
+                    "direction": direction,
+                    "distance": distance,
+                    "area_by_text": area_by_text,
+                    "area_by_id": area_by_id,
+                    "area_by_type": area_by_type,
+                    "area_by_key": area_by_key,
+                    "side": side,
+                    "start_point": start_point,
+                    "swipe_time": swipe_time,
+                    "speed": speed,
+                },
+            )
+        )
+
+    async def mouse_scroll(
+        self,
+        *,
+        direction: str,
+        steps: int,
+        x: int | None = None,
+        y: int | None = None,
+        at_by_text: str | None = None,
+        at_by_id: str | None = None,
+        at_by_type: str | None = None,
+        at_by_key: str | None = None,
+        key1: int | None = None,
+        key2: int | None = None,
+    ) -> None:
+        self.events.append(
+            (
+                "mouse_scroll",
+                {
+                    "direction": direction,
+                    "steps": steps,
+                    "x": x,
+                    "y": y,
+                    "at_by_text": at_by_text,
+                    "at_by_id": at_by_id,
+                    "at_by_type": at_by_type,
+                    "at_by_key": at_by_key,
+                    "key1": key1,
+                    "key2": key2,
+                },
+            )
+        )
