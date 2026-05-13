@@ -159,7 +159,7 @@ Hylyre/
 
 ### 3.1 SDK 形态
 
-**做法 A（外部 Agent 生成 JSON 步骤、无运行态 VLM）**：规约见 [`docs/agent-plan-a.md`](./agent-plan-a.md)；可安装 Cursor 规则 [`contrib/cursor-rules/hylyre-plan-a.mdc`](../contrib/cursor-rules/hylyre-plan-a.mdc) → `.cursor/rules/`。
+**做法 A（外部 Agent 生成 JSON 步骤、无运行态 VLM）**：规约见 [`docs/agent-plan-a.md`](./agent-plan-a.md)；**AI 持续指引**见 [`AGENTS.md`](../AGENTS.md)、[`.cursor/rules/hylyre.mdc`](../.cursor/rules/hylyre.mdc)；MCP 一次性配置见 [`docs/cursor-mcp-setup.md`](./cursor-mcp-setup.md)。
 
 ```python
 from hylyre.wiring import create_hypium_agent_with_env_vlm

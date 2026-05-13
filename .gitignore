@@ -10,8 +10,10 @@
 **/pnpm-lock.yaml
 /local.properties
 /.idea
-# OpenSpec 在本机生成的 Cursor 路由（若团队需共享 slash，可删此行改为精细排除）
-/.cursor
+# Cursor：共享 Agent 规则提交 `.cursor/rules/`；其余路径仍忽略
+/.cursor/*
+!/.cursor/rules/
+!/.cursor/rules/**
 
 # -----------------------------------------------------------------------------
 # Python bytecode & caches
@@ -103,5 +105,7 @@ tmp/
 temp/
 # Hypium / xdevice 运行时报告目录（本机烟测会生成）
 reports/
+# 本地 smoke / 实验输出（如 `_out/smoke`）
+_out/
 # `hylyre mock start` 默认 PID 与本地状态
 .hylyre/

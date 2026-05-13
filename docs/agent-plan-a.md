@@ -60,8 +60,12 @@ hylyre run \
 - 需已安装：`pip install -e ".[device]"`（或 `hylyre[device]`），`hdc`/设备可用。
 - Mock：按需加 `--mock-port` / `--lyrebird-url` 与 `--mock-group`。
 
-## 5. 与 Cursor MCP 的衔接
+## 5. 与 Cursor、MCP 的衔接
 
-配置了 Hylyre MCP 时，Agent 可先 **写出** 合规的 `test-plan.md`，再调用 **`hylyre_run_plan`**，传同一组路径；`use_fakes=false` 且勿忘设备相关参数。
+**一次性配置**：在 Cursor 里启用 Hylyre MCP 的步骤见 [`docs/cursor-mcp-setup.md`](./cursor-mcp-setup.md)。配置后 Agent 可用 **`hylyre_run_plan`** 等工具，无需每轮复述 CLI。
 
-**Cursor 规则**：仓库已提交副本 [`contrib/cursor-rules/hylyre-plan-a.mdc`](../contrib/cursor-rules/hylyre-plan-a.mdc)。复制到项目根 `.cursor/rules/hylyre-plan-a.mdc`（本仓 `.cursor/` 默认 gitignore），编辑 `*test-plan*.md` 时即可自动附加该规则。
+**仓库内约定（已提交）**：
+
+- **[`AGENTS.md`](../AGENTS.md)**：给人与 Agent 看的「默认如何用 Hylyre」摘要。
+- **[`.cursor/rules/hylyre.mdc`](../.cursor/rules/hylyre.mdc)**：`alwaysApply`，约束 Agent 的调用优先级（MCP → CLI、做法 A、何时要 VLM）。
+- **[`.cursor/rules/hylyre-plan-a.mdc`](../.cursor/rules/hylyre-plan-a.mdc)**：编辑 `*test-plan*.md` 时触发，细化 JSON 步骤格式。

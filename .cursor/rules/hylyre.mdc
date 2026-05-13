@@ -1,0 +1,31 @@
+---
+description: Hylyre 默认行为 — 如何让 AI 稳定调用本仓库 CLI 或 MCP（不需用户每轮复述）
+alwaysApply: true
+---
+
+# Hylyre 仓库内 AI 助手
+
+## 目标
+
+用户希望「方便地用 Hylyre 做真机/离线测试」。**不要**在每一轮对话开头要求用户重复安装步骤；优先读本仓库 **`AGENTS.md`**，并遵守下面优先级。
+
+## 调用方式（按优先级）
+
+1. **若当前会话已连接 Hylyre MCP**（工具名形如 `hylyre_run_plan`、`hylyre_doctor`）：优先用 MCP，路径参数用**绝对路径**。
+2. **否则**：在**仓库根目录**执行 **`python -m hylyre …`**（`run` / `report verify` / `doctor` / `device list` 等）。
+
+## 自然语言测试意图 → 可执行输入（做法 A）
+
+当用户要「不配运行态 VLM」跑计划时：
+
+- 编写或修改 **`*test-plan*.md`**：必须有 **`## 测试用例清单`** 与 7 列表头；「测试步骤」列只放 **`action` / `touch` / `input`** 的**单行 JSON**；多步用 **`;` 或 `；`**。细则见 **`docs/agent-plan-a.md`** 与 **`hylyre-plan-a.mdc`**。
+
+## 常用参数意图
+
+- **快速验证链路**：`--use-fakes` + fixture `tests/e2e/fixtures/mock-test-plan.md`。
+- **真机**：安装 **`hylyre[device]`**，`--device-sn`、`--bundle`；JSON 步骤可无 **`HYLYRE_VLM_*`**；若「预期结果」列不要 VLM 断言，用 **`--skip-assert-expected`**。
+- **自然语言步骤或 `hylyre_ai_*`**：需要 **`HYLYRE_VLM_*`**（及设备能力）。
+
+## MCP 一次性配置
+
+若用户尚未启用 MCP：指引阅读 **`docs/cursor-mcp-setup.md`**，配置一次即可，无需写进每条用户消息。
