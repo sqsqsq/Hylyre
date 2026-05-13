@@ -174,9 +174,14 @@ async def _execute_one_step(
             await agent.run_planned_tap(payload)
         elif "input" in payload:
             await agent.run_planned_input(payload)
+        elif "swipe" in payload:
+            await agent.run_planned_swipe(payload)
+        elif "scroll" in payload:
+            await agent.run_planned_scroll(payload)
         else:
             raise ValueError(
-                f"{case_id}: JSON step must contain action, touch, or input key"
+                f"{case_id}: JSON step must contain one of: action, touch, input, "
+                f"swipe, scroll"
             )
         tool_log.append({"case": case_id, "kind": "planned_json", "payload": payload})
         return
