@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from pathlib import Path
+from typing import Any
 
 import typer
 
 from hylyre.harness.runner import verify_report
 from hylyre.report.emit import write_run_artifacts
-from hylyre.scenario.runner import ScenarioRunResult, ScenarioRunner
+from hylyre.scenario.plan_parse import ParsedPlan, TestCase
+from hylyre.scenario.runner import CaseResult, ScenarioRunResult, ScenarioRunner
+
+TRACE_DRAFT_SCHEMA = "0.1-p0"
 
 
 def infer_model_backend_from_env() -> str:
@@ -77,6 +82,139 @@ def execute_scenario(
             model_backend=mb,
         )
     verify_report(report_out, trace_out, plan)
+    return f"Wrote {report_out} and {trace_out}"
+
+
+def execute_report_begin(
+    *,
+    feature: str,
+    trace_path: Path | None = None,
+    plan_path: Path | None = None,
+    trace_state: dict[str, Any] | None = None,
+    model_backend: str = "none",
+) -> dict[str, Any]:
+    """Initialize incremental trace state (draft schema); persist when ``trace_path`` set."""
+    if trace_state is not None:
+        raise ValueError("execute_report_begin: use trace_state=None")
+    state: dict[str, Any] = {
+        "schema_version": TRACE_DRAFT_SCHEMA,
+        "feature": feature,
+        "phase": "testing",
+        "outcome": "success",
+        "model_backend": model_backend,
+        "tool_calls": [],
+        "retries": 0,
+        "artifacts": {
+            "adhoc": True,
+            "plan": str(plan_path) if plan_path else None,
+        },
+        "cases": [],
+    }
+    if trace_path is not None:
+        trace_path.write_text(
+            json.dumps(state, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    return state
+
+
+def execute_report_record(
+    *,
+    trace_path: Path | None = None,
+    trace_state: dict[str, Any] | None = None,
+    case_id: str,
+    name: str,
+    priority: str,
+    ac_ref: str,
+    status: str,
+    notes: str = "",
+) -> dict[str, Any]:
+    """Append one case row to incremental trace state."""
+    if trace_state is not None:
+        state = trace_state
+    elif trace_path is not None:
+        state = json.loads(trace_path.read_text(encoding="utf-8"))
+    else:
+        raise ValueError("Need trace_path or trace_state")
+    entry = {
+        "id": case_id,
+        "status": status,
+        "priority": priority,
+        "ac_ref": ac_ref,
+        "notes": notes,
+        "name": name,
+    }
+    state.setdefault("cases", []).append(entry)
+    if trace_path is not None:
+        trace_path.write_text(
+            json.dumps(state, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    return state
+
+
+def execute_report_finalize(
+    *,
+    trace_path: Path | None = None,
+    trace_state: dict[str, Any] | None = None,
+    plan_path: Path | None = None,
+    report_out: Path,
+    trace_out: Path,
+    model_backend: str | None = None,
+) -> str:
+    """Build ScenarioRunResult from incremental cases; write report + trace; L5 verify."""
+    if trace_state is not None:
+        state = trace_state
+    elif trace_path is not None:
+        state = json.loads(trace_path.read_text(encoding="utf-8"))
+    else:
+        raise ValueError("Need trace_path or trace_state")
+    raw_cases: list[dict[str, Any]] = state.get("cases", [])
+    if not raw_cases:
+        raise ValueError("finalize requires at least one recorded case")
+    feature = str(state.get("feature", "")).strip() or "adhoc"
+    parsed_cases: list[TestCase] = []
+    case_results: list[CaseResult] = []
+    for c in raw_cases:
+        cid = str(c["id"])
+        tc = TestCase(
+            case_id=cid,
+            name=str(c.get("name", "")),
+            preconditions="",
+            steps="",
+            expected="",
+            priority=str(c.get("priority", "P2")),
+            ac_ref=str(c.get("ac_ref", "")),
+        )
+        parsed_cases.append(tc)
+        case_results.append(
+            CaseResult(
+                case=tc,
+                status=str(c["status"]),
+                notes=str(c.get("notes", "")),
+            )
+        )
+    plan_marker = plan_path if plan_path is not None else Path("(ad-hoc)")
+    parsed = ParsedPlan(path=plan_marker, cases=tuple(parsed_cases))
+    result = ScenarioRunResult(
+        feature=feature,
+        plan=parsed,
+        case_results=tuple(case_results),
+        use_fakes=False,
+    )
+    mb = (
+        model_backend
+        if model_backend is not None and model_backend.strip()
+        else str(state.get("model_backend", "none"))
+    )
+    write_run_artifacts(
+        result,
+        report_path=report_out,
+        trace_path=trace_out,
+        model_backend=mb,
+    )
+    verify_plan = plan_path if plan_path is not None else None
+    verify_report(report_out, trace_out, verify_plan)
     return f"Wrote {report_out} and {trace_out}"
 
 
@@ -153,7 +291,7 @@ def execute_report_verify(
     *,
     report: Path,
     trace: Path,
-    plan: Path,
+    plan: Path | None = None,
 ) -> None:
     """Raises ValueError when contracts fail."""
     verify_report(report, trace, plan)
@@ -163,7 +301,7 @@ def run_report_verify(
     *,
     report: Path,
     trace: Path,
-    plan: Path,
+    plan: Path | None = None,
 ) -> None:
     try:
         execute_report_verify(report=report, trace=trace, plan=plan)
@@ -171,3 +309,71 @@ def run_report_verify(
         typer.secho(f"verify_report failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
     typer.echo("Contracts OK")
+
+
+def run_report_begin(
+    *,
+    feature: str,
+    trace_out: Path,
+    plan_path: Path | None,
+    model_backend: str,
+) -> None:
+    try:
+        execute_report_begin(
+            feature=feature,
+            trace_path=trace_out,
+            plan_path=plan_path,
+            model_backend=model_backend,
+        )
+    except ValueError as exc:
+        typer.secho(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo(str(trace_out.resolve()))
+
+
+def run_report_record(
+    *,
+    trace_path: Path,
+    case_id: str,
+    name: str,
+    priority: str,
+    ac_ref: str,
+    status: str,
+    notes: str,
+) -> None:
+    try:
+        execute_report_record(
+            trace_path=trace_path,
+            case_id=case_id,
+            name=name,
+            priority=priority,
+            ac_ref=ac_ref,
+            status=status,
+            notes=notes,
+        )
+    except ValueError as exc:
+        typer.secho(str(exc), err=True)
+        raise typer.Exit(code=2) from exc
+    typer.echo("ok")
+
+
+def run_report_finalize(
+    *,
+    trace_path: Path,
+    plan_path: Path | None,
+    report_out: Path,
+    trace_write: Path,
+    model_backend: str | None,
+) -> None:
+    try:
+        msg = execute_report_finalize(
+            trace_path=trace_path,
+            plan_path=plan_path,
+            report_out=report_out,
+            trace_out=trace_write,
+            model_backend=model_backend,
+        )
+    except ValueError as exc:
+        typer.secho(f"verify_report failed: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(msg)

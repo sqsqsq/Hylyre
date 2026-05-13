@@ -40,3 +40,33 @@ def test_run_scenario_use_fakes_model_backend_override(tmp_path: Path) -> None:
     )
     data = json.loads(trace.read_text(encoding="utf-8"))
     assert data.get("model_backend") == "my-vendor-model"
+
+
+def test_incremental_report_finalize_without_plan(tmp_path: Path) -> None:
+    draft = tmp_path / "draft.json"
+    report = tmp_path / "out-report.md"
+    final_trace = tmp_path / "out-trace.json"
+    run_cmd.execute_report_begin(
+        feature="adhoc-feature",
+        trace_path=draft,
+        plan_path=None,
+        model_backend="none",
+    )
+    run_cmd.execute_report_record(
+        trace_path=draft,
+        case_id="TC-AH-01",
+        name="Smoke",
+        priority="P0",
+        ac_ref="AC-AH-01",
+        status="通过",
+        notes="incremental",
+    )
+    msg = run_cmd.execute_report_finalize(
+        trace_path=draft,
+        plan_path=None,
+        report_out=report,
+        trace_out=final_trace,
+    )
+    assert "Wrote" in msg
+    assert report.is_file() and final_trace.is_file()
+    run_cmd.execute_report_verify(report=report, trace=final_trace, plan=None)
