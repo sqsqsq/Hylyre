@@ -43,6 +43,27 @@ async def test_run_on_agent_json_step_no_vlm(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_on_agent_swipe_root_step(tmp_path: Path) -> None:
+    plan = tmp_path / "p.md"
+    step = '{"swipe":{"direction":"DOWN","distance":55}}'
+    plan.write_text(
+        _PLAN_TABLE + f"| TC-S | n |  | {step} |  | P0 | AC-S |\n",
+        encoding="utf-8",
+    )
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    runner = ScenarioRunner(use_fakes=False)
+    try:
+        r = await runner.run_plan_on_agent(
+            ag, plan, feature="feat", check_expected=False
+        )
+    finally:
+        await ag.aclose()
+    assert r.case_results[0].status == "通过"
+    assert any(e[0] == "swipe" for e in ui.events)
+
+
+@pytest.mark.asyncio
 async def test_run_on_agent_nl_step_needs_vlm(tmp_path: Path) -> None:
     plan = tmp_path / "p.md"
     plan.write_text(

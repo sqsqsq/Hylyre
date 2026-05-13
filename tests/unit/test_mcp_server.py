@@ -18,10 +18,23 @@ async def test_mcp_tool_inventory() -> None:
     mcp = build_mcp()
     tools = await mcp.list_tools()
     names = {t.name for t in tools}
-    assert len(names) == 9
+    assert len(names) == 22
     expected = {
         "hylyre_run_plan",
         "hylyre_report_verify",
+        "hylyre_open_session",
+        "hylyre_close_session",
+        "hylyre_screenshot",
+        "hylyre_dump_ui",
+        "hylyre_start_app",
+        "hylyre_run_action",
+        "hylyre_run_tap",
+        "hylyre_run_input",
+        "hylyre_run_swipe",
+        "hylyre_run_scroll",
+        "hylyre_report_begin",
+        "hylyre_report_record",
+        "hylyre_report_finalize",
         "hylyre_device_list",
         "hylyre_doctor",
         "hylyre_ai_action",
@@ -101,3 +114,45 @@ async def test_mcp_progress_show_returns_path(tmp_path: Path, monkeypatch) -> No
     text = result.content[0].text
     assert "progress.md" in text
     assert "line2" in text
+
+
+@pytest.mark.asyncio
+async def test_mcp_incremental_report_without_plan(tmp_path: Path) -> None:
+    import json
+
+    report = tmp_path / "rep.md"
+    trace = tmp_path / "trace.json"
+    mcp = build_mcp()
+    async with Client(mcp) as client:
+        b = await client.call_tool(
+            "hylyre_report_begin",
+            {"feature": "mcp-loop", "model_backend": "none"},
+        )
+        state = json.loads(b.content[0].text)
+        r = await client.call_tool(
+            "hylyre_report_record",
+            {
+                "trace_state": state,
+                "case_id": "TC-MCP-01",
+                "name": "Inc",
+                "priority": "P0",
+                "ac_ref": "AC-MCP-01",
+                "status": "通过",
+                "notes": "",
+            },
+        )
+        state2 = json.loads(r.content[0].text)
+        msg = await client.call_tool(
+            "hylyre_report_finalize",
+            {
+                "trace_state": state2,
+                "report_out": str(report),
+                "trace_out": str(trace),
+            },
+        )
+        assert "Wrote" in msg.content[0].text
+        v = await client.call_tool(
+            "hylyre_report_verify",
+            {"report_path": str(report), "trace_path": str(trace)},
+        )
+        assert "Contracts OK" in v.content[0].text
