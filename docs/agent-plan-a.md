@@ -1,5 +1,7 @@
 # 做法 A：Cursor / 外部 Agent 生成 test-plan（无运行态 VLM）
 
+适合 **事先已掌握** 稳定 `by_id` / `by_text`（或可靠坐标）、要把一批用例固化成 `test-plan.md` 做回归的场景。若需要先读当前界面再规划步骤，请改用 **[Agent 循环模式](agent-loop.md)**（CLI 或 MCP 均可）。
+
 目标：由 **Cursor Agent**（或其它 LLM）把用户的自然语言意图 **改写为 `test-plan.md` 里「测试步骤」列中的单行 JSON**，再用 `hylyre run` 在真机上执行。此时 **不需要** 配置 `HYLYRE_VLM_*` 去理解步骤（步骤已是结构化 JSON）。
 
 > 解析与执行见 `hylyre/scenario/runner.py`：非 JSON 行会走 `ai_action`，必须带 VLM；**JSON 行**走 `run_planned_*`，只依赖 Hypium / 指纹设备。
@@ -21,15 +23,28 @@
 - 不要使用 `<br/>` 拆步骤：解析时 `<br/>` 会被替换成空格，多段 JSON 会粘在一起。
 - **避免** 在任意列里出现未转义的 **竖线 `|`**：表格按 `|` 切列，会破坏 7 列对齐。JSON 里的文案若含 `|`，改用别表述或 `by_id`。
 
-### 2.1 允许的三种根键（与 `HylyreAgent.run_planned_*` 一致）
+### 2.1 允许的 JSON 根键（与 `HylyreAgent.run_planned_*` 及 `hylyre run --plan` 一致）
 
 | 根键 | 含义 | 典型 payload |
 |------|------|----------------|
-| `action` | 单步动作 | `{"action":{"type":"touch","by_text":"登录"}}`、`{"action":{"type":"input","text":"100","by_id":"amount"}}` |
+| `action` | 单步动作 | `{"action":{"type":"touch","by_text":"登录"}}`、`{"action":{"type":"input","text":"100","by_id":"amount"}}`、`{"action":{"type":"swipe","direction":"UP","distance":60,"area":{"by_type":"Scroll"}}}` |
 | `touch` | 等价于 tap schema | `{"touch":{"by_text":"充值"}}`、`{"touch":{"x":100,"y":200}}` |
 | `input` | 输入 schema | `{"input":{"text":"hello","by_id":"field","by_text":null}}` |
+| `swipe` | 方向滑动手势（Hypium `swipe`）；**半屏模态内需带 `area` 限定列表 `Scroll`**；竖向列表露出下方条目常用 **`UP`** | `{"swipe":{"direction":"UP","distance":55,"area":{"by_type":"Scroll"}}}` |
+| `scroll` | 纵向滚轮式滚动（Hypium `mouse_scroll`） | `{"scroll":{"direction":"down","steps":6}}` |
 
 `action.type` 为 `touch` 时还可带 `wait_time`（可选）。
+
+**`swipe` / `scroll` / `action.type` 为 `swipe` 或 `scroll`** 的字段说明、列表虚拟化、半屏模态及 **`dump-ui`** 的关系，见 [`agent-loop.md`](./agent-loop.md) 中的 **列表与滚屏** 与 **自然语言未约定手势时** 两节。
+
+### 2.2 `action.type`：`swipe` 与 `scroll`
+
+与根键 **`swipe` / `scroll`** 等价，仅外层换成 `action` 信封：
+
+- **`{"action":{"type":"swipe","direction":"LEFT","distance":50}}`**
+- **`{"action":{"type":"scroll","direction":"up","steps":3,"at":{"by_type":"Scroll"}}}`**
+
+字段名与 [`agent-loop.md`](./agent-loop.md) 中 **列表与滚屏**、**自然语言未约定手势时** 两小节一致。
 
 ## 3. 预期结果列与 VLM
 
@@ -62,10 +77,11 @@ hylyre run \
 
 ## 5. 与 Cursor、MCP 的衔接
 
-**一次性配置**：在 Cursor 里启用 Hylyre MCP 的步骤见 [`docs/cursor-mcp-setup.md`](./cursor-mcp-setup.md)。配置后 Agent 可用 **`hylyre_run_plan`** 等工具，无需每轮复述 CLI。
+**一次性配置**：在 Cursor 里启用 Hylyre MCP 的步骤见 [`docs/cursor-mcp-setup.md`](./cursor-mcp-setup.md)。配置后 Agent 可用 **`hylyre_run_plan`**、`hylyre_dump_ui`、`hylyre_run_*`、`hylyre_report_*` 等工具；与 CLI **同一套 `execute_*` 逻辑**（见 [`agent-loop.md`](./agent-loop.md)）。
 
 **仓库内约定（已提交）**：
 
 - **[`AGENTS.md`](../AGENTS.md)**：给人与 Agent 看的「默认如何用 Hylyre」摘要。
-- **[`.cursor/rules/hylyre.mdc`](../.cursor/rules/hylyre.mdc)**：`alwaysApply`，约束 Agent 的调用优先级（MCP → CLI、做法 A、何时要 VLM）。
+- **[`.cursor/rules/hylyre.mdc`](../.cursor/rules/hylyre.mdc)**：`alwaysApply`，约束 Agent 的调用优先级（MCP → CLI、做法 A / 原子循环、何时要 VLM）。
 - **[`.cursor/rules/hylyre-plan-a.mdc`](../.cursor/rules/hylyre-plan-a.mdc)**：编辑 `*test-plan*.md` 时触发，细化 JSON 步骤格式。
+- **[`agent-loop.md`](./agent-loop.md)**：原子循环模式（dump-ui / screenshot + 增量报告）。

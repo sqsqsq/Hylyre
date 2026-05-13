@@ -1,6 +1,6 @@
 # Fixture — JSON 步骤（做法 A，无运行态 VLM）
 
-用于说明「测试步骤」列仅含 `action` / `touch` / `input` 单行 JSON；可配合 `hylyre run` 真机执行（需 `hylyre[device]` + hdc）。
+用于说明「测试步骤」列可含 `action` / `touch` / `input` / `swipe` / `scroll` 等单行 JSON；可配合 `hylyre run` 真机执行（需 `hylyre[device]` + hdc）。
 
 ## 测试用例清单
 

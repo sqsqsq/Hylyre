@@ -9,14 +9,18 @@
 
 ## 每轮对话里你应该怎么做（默认行为）
 
-1. **若 MCP 可用**：优先用 **`hylyre_run_plan`**、**`hylyre_report_verify`**、**`hylyre_doctor`**、**`hylyre_device_list`**、**`hylyre_ai_*`** 等；路径用**绝对路径**或相对 **仓库根** 的明确路径。
-2. **若 MCP 不可用**：在**仓库根**终端执行 `python -m hylyre …`（与 CLI 帮助一致）。
-3. **用户用自然语言描述用例、又不想配运行态 VLM**：按 **做法 A** 把步骤写进 `test-plan.md` 的「测试步骤」列（仅 **JSON**：`action` / `touch` / `input`）。规约见 [`docs/agent-plan-a.md`](docs/agent-plan-a.md)，字段提示见 [`.cursor/rules/hylyre-plan-a.mdc`](.cursor/rules/hylyre-plan-a.mdc)。
+1. **若 MCP 可用**：优先用 **`hylyre_run_plan`**、**`hylyre_report_*`**、**`hylyre_doctor`**、**`hylyre_device_list`**、**`hylyre_dump_ui`** / **`hylyre_screenshot`**、**`hylyre_run_*`**（planned JSON：`action` / `tap` / `input` / **`swipe`** / **`scroll`**）、以及按需的 **`hylyre_ai_*`**；路径用**绝对路径**或相对 **仓库根** 的明确路径。
+2. **若 MCP 不可用**：在**仓库根**终端执行 `python -m hylyre …`（与 CLI 帮助一致）。**CLI 与 MCP 共享同一套逻辑**（强 CLI / 弱 MCP 薄壳）；唯一例外是 MCP-only 的 **`hylyre_open_session`**（仅为复用连接，不增加新业务能力）。
+3. **用户用自然语言描述用例、又不想配运行态 VLM**：
+   - **已知 selector / 稳定文案**：按 **做法 A** 写 `test-plan.md`「测试步骤」列（仅 **JSON**：`action` / `touch` / `input`）。规约见 [`docs/agent-plan-a.md`](docs/agent-plan-a.md)。
+   - **需要先感知当前界面**：用 **原子循环**（`dump-ui` / `screenshot` + `run …` + `report …`）。用户 **未写滑动手势** 时的默认纪律见 [`docs/agent-loop.md`](docs/agent-loop.md) **「自然语言未约定手势时」**；列表与半屏模态见同页 **「列表与滚屏」**。
 
 ## 最短命令备忘
 
 - 离线烟测：`hylyre run --plan <plan.md> --feature <slug> --report-out <report.md> --trace-out <trace.json> --use-fakes`
-- 校验：`hylyre report verify --report … --trace … --plan …`
+- 校验：`hylyre report verify --report … --trace … [--plan …]`（ad-hoc 报告可省略 `--plan`）
+- 原子循环（节选）：`hylyre dump-ui`、`hylyre screenshot`、`hylyre run action|tap|input|swipe|scroll`。**半屏浮层里滚动列表**须在 **`swipe.area` / `scroll.at`**（常用 **`by_type: Scroll`**）内操作，或使用 **`run swipe --area-by-type Scroll`** / **`run scroll --at-by-type Scroll`**，避免全屏下滑关掉 Sheet（详见 [`docs/agent-loop.md`](docs/agent-loop.md)）。
+- 增量报告：`hylyre report begin` → `hylyre report record` → `hylyre report finalize`
 - 真机：去掉 `--use-fakes`，安装 `hylyre[device]`，按需 `--device-sn`、`--bundle`、`--skip-assert-expected`（JSON 步骤 + 无 VLM 时常用）。
 
 ## 不要做的

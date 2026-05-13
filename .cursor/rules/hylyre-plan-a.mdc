@@ -15,18 +15,22 @@ alwaysApply: false
 - 同一单元格内多步：用 **`;` 或 `；`** 分隔多条 JSON，不要用 `<br/>`。
 - 全表避免出现会破坏表格的 **`|`**（尤其步骤列 JSON 内的字符串）。
 
-## 步骤 JSON（三选一，根键唯一）
+## 步骤 JSON（根键唯一；任选其一）
 
 1. **action**（与 `run_planned_action` 一致）
    - `{"action":{"type":"touch","by_text":"登录"}}`
    - `{"action":{"type":"touch","by_id":"btn_ok","wait_time":0.2}}`
    - `{"action":{"type":"input","text":"100","by_id":"amount"}}`
+   - `{"action":{"type":"swipe","direction":"UP","distance":55,"area":{"by_type":"Scroll"}}}`、`{"action":{"type":"scroll","direction":"down","steps":5,"at":{"by_type":"Scroll"}}}`
 2. **touch**（与 `run_planned_tap` 一致）
    - `{"touch":{"by_text":"充值"}}` 或 `{"touch":{"x":10,"y":20}}`
 3. **input**（与 `run_planned_input` 一致）
    - `{"input":{"text":"hello","by_id":"field","by_text":null}}`
+4. **swipe** / **scroll**（与原子 CLI `run swipe` / `run scroll`、MCP `hylyre_run_swipe` / `hylyre_run_scroll` 一致；竖向列表、半屏模态见 **`docs/agent-loop.md`**）
+   - `{"swipe":{"direction":"UP","distance":65,"area":{"by_type":"Scroll"}}}`
+   - `{"scroll":{"direction":"down","steps":8,"at":{"by_type":"Scroll"}}}`
 
-翻译用户意图时：优先 **by_id**（稳定）；只有没有 id 时才用 **by_text** 或坐标。
+翻译用户意图时：优先 **by_id**（稳定）；只有没有 id 时才用 **by_text** 或坐标。需要固定滚动语义时在步骤 JSON 中写明 **`swipe`/`scroll`**（勿依赖对话 Agent 猜测）；参见 **`docs/agent-loop.md`**「自然语言未约定手势时」对照原子循环纪律。
 
 ## 预期结果
 

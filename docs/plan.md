@@ -236,7 +236,7 @@ hylyre report verify \
 hylyre mcp serve [--transport stdio] [--show-banner]
 ```
 
-**精选 ≤9 个原子工具**（与 CLI 同源实现）：`hylyre_run_plan` / `hylyre_report_verify` / `hylyre_device_list` / `hylyre_doctor` / `hylyre_ai_action` / `hylyre_ai_query` / `hylyre_ai_assert` / `hylyre_mock_activate` / `hylyre_progress_show`。控制 schema 注入；CI 对描述做约 500「词」的启发式上限。
+**原子工具**（与 CLI 同源；完整清单以 MCP `list_tools` 为准）：例如 `hylyre_run_plan`、`hylyre_report_verify`、`hylyre_dump_ui`、`hylyre_screenshot`、`hylyre_run_action`、`hylyre_run_tap`、`hylyre_run_input`、**`hylyre_run_swipe`**、**`hylyre_run_scroll`**、`hylyre_start_app`、`hylyre_device_list`、`hylyre_doctor`、`hylyre_ai_*`、`hylyre_mock_activate`、`hylyre_progress_show`、`hylyre_report_*`、`hylyre_open_session` 等。控制 schema 注入；CI 对描述做约 500「词」的启发式上限。
 
 ---
 
