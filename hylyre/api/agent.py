@@ -68,6 +68,11 @@ class HylyreAgent:
             bundle, page_name=page_name, params=params, wait_time=wait_time
         )
 
+    async def dump_ui(self) -> dict[str, Any]:
+        """Return structured UI tree for external agents (no VLM)."""
+        await self._ensure_ui()
+        return await self._ui.dump_ui()
+
     async def mock_activate_group(self, group_id: str) -> None:
         if self._mock is None:
             raise ValueError("No mock controller configured on this HylyreAgent")
@@ -126,6 +131,12 @@ class HylyreAgent:
                 by_text=act.get("by_text"),
                 by_id=act.get("by_id"),
             )
+        elif t == "swipe":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_swipe_block(block)
+        elif t == "scroll":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_scroll_block(block)
         else:
             raise ValueError(f"Unsupported action type: {t!r}")
 
@@ -194,6 +205,161 @@ class HylyreAgent:
         await self._apply_input_block(
             block, value=value, by_text=by_text, by_id=by_id
         )
+
+    @staticmethod
+    def _swipe_area_kwargs(area: dict[str, Any] | None) -> dict[str, str | None]:
+        blank = {
+            "area_by_text": None,
+            "area_by_id": None,
+            "area_by_type": None,
+            "area_by_key": None,
+        }
+        if area is None:
+            return blank
+        if not isinstance(area, dict):
+            raise ValueError("swipe.area must be an object or omitted")
+        found = [
+            k
+            for k in ("by_text", "by_id", "by_type", "by_key")
+            if area.get(k) is not None
+        ]
+        if len(found) > 1:
+            raise ValueError(
+                "swipe.area allows at most one of by_text, by_id, by_type, by_key"
+            )
+        out = dict(blank)
+        if len(found) == 1:
+            k = found[0]
+            out[f"area_{k}"] = str(area[k])
+        return out
+
+    async def _apply_swipe_block(self, block: dict[str, Any]) -> None:
+        direction = block.get("direction")
+        if not isinstance(direction, str) or not direction.strip():
+            raise ValueError("swipe requires non-empty string direction")
+        area_kw = self._swipe_area_kwargs(block.get("area"))
+        sp_raw = block.get("start_point")
+        sp: tuple[float, float] | None = None
+        if sp_raw is not None:
+            if (
+                not isinstance(sp_raw, (list, tuple))
+                or len(sp_raw) != 2
+            ):
+                raise ValueError("swipe start_point must be a pair [x, y]")
+            sp = (float(sp_raw[0]), float(sp_raw[1]))
+        speed_raw = block.get("speed")
+        speed_i = None if speed_raw is None else int(speed_raw)
+        side_raw = block.get("side")
+        await self._ui.swipe(
+            direction=direction,
+            distance=int(block.get("distance", 60)),
+            side=str(side_raw) if side_raw is not None else None,
+            start_point=sp,
+            swipe_time=float(block.get("swipe_time", 0.3)),
+            speed=speed_i,
+            **area_kw,
+        )
+
+    @staticmethod
+    def _scroll_xy_or_none(
+        *, at: dict[str, Any] | None, block: dict[str, Any]
+    ) -> tuple[int | None, int | None]:
+        bx = block.get("x")
+        by = block.get("y")
+        if bx is not None or by is not None:
+            if at is not None:
+                raise ValueError(
+                    "scroll: use top-level x/y or scroll.at, not both"
+                )
+            if bx is None or by is None:
+                raise ValueError("scroll x and y must be provided together")
+            return int(bx), int(by)
+        if at is None:
+            return None, None
+        if not isinstance(at, dict):
+            raise ValueError("scroll.at must be an object or omitted")
+        if at.get("x") is not None or at.get("y") is not None:
+            if at.get("x") is None or at.get("y") is None:
+                raise ValueError("scroll.at x and y must be provided together")
+            sel_keys = [
+                k
+                for k in ("by_text", "by_id", "by_type", "by_key")
+                if at.get(k) is not None
+            ]
+            if sel_keys:
+                raise ValueError("scroll.at cannot mix x/y with selector keys")
+            return int(at["x"]), int(at["y"])
+        return None, None
+
+    @staticmethod
+    def _scroll_selector_kwargs(at: dict[str, Any] | None) -> dict[str, str | None]:
+        blank = {
+            "at_by_text": None,
+            "at_by_id": None,
+            "at_by_type": None,
+            "at_by_key": None,
+        }
+        if at is None:
+            return blank
+        if not isinstance(at, dict):
+            raise ValueError("scroll.at must be an object or omitted")
+        if at.get("x") is not None or at.get("y") is not None:
+            return blank
+        found = [
+            k
+            for k in ("by_text", "by_id", "by_type", "by_key")
+            if at.get(k) is not None
+        ]
+        if len(found) > 1:
+            raise ValueError(
+                "scroll.at allows at most one of by_text, by_id, by_type, by_key"
+            )
+        out = dict(blank)
+        if len(found) == 1:
+            k = found[0]
+            out[f"at_{k}"] = str(at[k])
+        return out
+
+    async def _apply_scroll_block(self, block: dict[str, Any]) -> None:
+        direction = block.get("direction")
+        if not isinstance(direction, str) or not direction.strip():
+            raise ValueError("scroll requires non-empty string direction")
+        steps_raw = block.get("steps")
+        if steps_raw is None:
+            raise ValueError("scroll requires steps")
+        steps = int(steps_raw)
+        at = block.get("at")
+        if at is not None and not isinstance(at, dict):
+            raise ValueError("scroll.at must be an object or omitted")
+        xy = self._scroll_xy_or_none(at=at, block=block)
+        sel_kw = self._scroll_selector_kwargs(at)
+        k1 = block.get("key1")
+        k2 = block.get("key2")
+        await self._ui.mouse_scroll(
+            direction=direction,
+            steps=steps,
+            x=xy[0],
+            y=xy[1],
+            key1=None if k1 is None else int(k1),
+            key2=None if k2 is None else int(k2),
+            **sel_kw,
+        )
+
+    async def run_planned_swipe(self, payload: dict[str, Any]) -> None:
+        """Apply ``swipe`` block (Hypium directional swipe; no VLM)."""
+        await self._ensure_ui()
+        block = payload.get("swipe")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned swipe payload missing swipe dict: {payload!r}")
+        await self._apply_swipe_block(block)
+
+    async def run_planned_scroll(self, payload: dict[str, Any]) -> None:
+        """Apply ``scroll`` block (Hypium mouse_scroll; vertical wheel; no VLM)."""
+        await self._ensure_ui()
+        block = payload.get("scroll")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned scroll payload missing scroll dict: {payload!r}")
+        await self._apply_scroll_block(block)
 
     async def ai_tap(
         self,
