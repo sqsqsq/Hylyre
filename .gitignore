@@ -10,6 +10,8 @@
 **/pnpm-lock.yaml
 /local.properties
 /.idea
+/.obsidian
+/tmp_hypium
 # Cursor：共享 Agent 规则提交 `.cursor/rules/`；其余路径仍忽略
 /.cursor/*
 !/.cursor/rules/
