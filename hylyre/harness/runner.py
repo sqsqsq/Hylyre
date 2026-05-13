@@ -16,11 +16,14 @@ _CONTRACTS = Path(__file__).resolve().parents[1] / "contracts"
 _TIERS = ("P0", "P1", "P2")
 
 
-def verify_report(report: Path | str, trace: Path | str, plan: Path | str) -> bool:
+def verify_report(
+    report: Path | str,
+    trace: Path | str,
+    plan: Path | str | None = None,
+) -> bool:
     """Verify artifacts against Hylyre contracts. Returns True or raises ValueError."""
     rpath = Path(report)
     tpath = Path(trace)
-    ppath = Path(plan)
     report_text = rpath.read_text(encoding="utf-8")
     trace_data = json.loads(tpath.read_text(encoding="utf-8"))
     sections = _load_report_contract()
@@ -31,7 +34,8 @@ def verify_report(report: Path | str, trace: Path | str, plan: Path | str) -> bo
     verdicts = set(sections["verdict_values"])
     rows = _parse_execution_table(report_text, statuses)
     _validate_verdict(report_text, verdicts)
-    _validate_plan_report_ids(ppath, rows)
+    if plan is not None:
+        _validate_plan_report_ids(Path(plan), rows)
     _validate_defects_section(report_text, rows)
     required_tiers = tuple(sections.get("pass_rate_required_tiers", _TIERS))
     overall_label = str(sections.get("pass_rate_overall_label", "总体"))
