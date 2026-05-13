@@ -12,6 +12,7 @@ from hylyre.cli.commands import (
     bootstrap_cmd,
     device as device_cmd,
     doctor as doctor_cmd,
+    loop_cmd,
     mock_cmd,
     progress_cmd,
     run_cmd,
@@ -25,6 +26,9 @@ app = typer.Typer(
 )
 report_app = typer.Typer(help="Test report tools")
 app.add_typer(report_app, name="report")
+
+run_app = typer.Typer(help="Run test plans or atomic Hypium JSON steps")
+app.add_typer(run_app, name="run")
 
 device_app = typer.Typer(help="Device helpers (HDC + Hypium)")
 app.add_typer(device_app, name="device")
@@ -101,73 +105,92 @@ def spec_list() -> None:
     spec_cmd.run_spec_list()
 
 
-@app.command()
-def run(
-    plan: Path = typer.Option(
-        ...,
+@run_app.callback(invoke_without_command=True)
+def run_plan_batch(
+    ctx: typer.Context,
+    plan: Optional[Path] = typer.Option(
+        None,
         "--plan",
         exists=True,
         dir_okay=False,
         readable=True,
-        help="Path to test-plan.md",
+        help="test-plan.md — batch mode when no subcommand.",
     ),
-    feature: str = typer.Option(
-        ...,
+    feature: Optional[str] = typer.Option(
+        None,
         "--feature",
-        help="Feature name (metadata for report/trace)",
+        help="Feature slug for report/trace metadata.",
     ),
-    report_out: Path = typer.Option(
-        ...,
+    report_out: Optional[Path] = typer.Option(
+        None,
         "--report-out",
-        help="Output test-report.md path",
+        help="Output test-report.md",
     ),
-    trace_out: Path = typer.Option(
-        ...,
+    trace_out: Optional[Path] = typer.Option(
+        None,
         "--trace-out",
-        help="Output trace.json path",
+        help="Output trace.json",
     ),
     use_fakes: bool = typer.Option(
         False,
         "--use-fakes",
-        help="Stub results only (no Hypium); for CI. Omit this to run on a connected device.",
+        help="Stub results (no Hypium); CI smoke.",
     ),
     device_sn: Optional[str] = typer.Option(
         None,
         "--device-sn",
-        help="Device serial for Hypium (hdc -t); default from Hypium when omitted.",
+        help="Hypium hdc -t serial.",
     ),
     bundle: Optional[str] = typer.Option(
         None,
         "--bundle",
-        help="App bundle for start_app() before cases (optional).",
+        help="start_app bundle before cases.",
     ),
     mock_port: Optional[int] = typer.Option(
         None,
         "--mock-port",
-        help="Lyrebird admin API port on 127.0.0.1 (implies mock controller).",
+        help="Lyrebird admin port on 127.0.0.1.",
     ),
     lyrebird_url: Optional[str] = typer.Option(
         None,
         "--lyrebird-url",
-        help="Lyrebird base URL (overrides --mock-port and HYLYRE_LYREBIRD_URL).",
+        help="Lyrebird base URL.",
     ),
     mock_group: Optional[str] = typer.Option(
         None,
         "--mock-group",
-        help="UUID of Lyrebird mock group to activate before cases.",
+        help="Lyrebird mock group UUID.",
     ),
     skip_assert_expected: bool = typer.Option(
         False,
         "--skip-assert-expected",
-        help="Do not call ai_assert on 预期结果 column (NL needs VLM).",
+        help="Skip VLM ai_assert on 预期结果.",
     ),
     model_backend: Optional[str] = typer.Option(
         None,
         "--model-backend",
-        help="Value for trace.json model_backend (overrides HYLYRE_VLM_* inference).",
+        help="trace.json model_backend override.",
     ),
 ) -> None:
-    """Execute a test plan and emit report + trace (verify as gate)."""
+    """Batch: ``hylyre run --plan …``. Subcommands: action / tap / input / swipe / scroll / start-app."""
+    if ctx.invoked_subcommand is not None:
+        return
+    if plan is None:
+        typer.secho(
+            "Batch mode needs --plan (or use a subcommand; try `hylyre run --help`).",
+            err=True,
+        )
+        raise typer.Exit(2)
+    need = []
+    if feature is None:
+        need.append("--feature")
+    if report_out is None:
+        need.append("--report-out")
+    if trace_out is None:
+        need.append("--trace-out")
+    if need:
+        typer.secho(f"Batch mode also requires: {', '.join(need)}", err=True)
+        raise typer.Exit(2)
     run_cmd.run_scenario(
         plan=plan,
         feature=feature,
@@ -182,6 +205,217 @@ def run(
         skip_assert_expected=skip_assert_expected,
         model_backend=model_backend,
     )
+
+
+@run_app.command("action")
+def run_action_step(
+    payload_json: str = typer.Option(
+        ...,
+        "--json",
+        "-j",
+        help='Planned JSON root key "action", e.g. {"action":{"type":"touch","by_text":"OK"}}',
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    mock_port: Optional[int] = typer.Option(None, "--mock-port"),
+    lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+) -> None:
+    """One Hylyre planned-action JSON step (no VLM)."""
+    loop_cmd.run_action_json(
+        payload_json=payload_json,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+    )
+
+
+@run_app.command("tap")
+def run_tap_step(
+    payload_json: str = typer.Option(
+        ...,
+        "--json",
+        "-j",
+        help='Planned tap JSON, e.g. {"touch":{"by_text":"OK"}}',
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    mock_port: Optional[int] = typer.Option(None, "--mock-port"),
+    lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+) -> None:
+    """One Hylyre planned tap JSON (no VLM)."""
+    loop_cmd.run_tap_json(
+        payload_json=payload_json,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+    )
+
+
+@run_app.command("input")
+def run_input_step(
+    payload_json: str = typer.Option(
+        ...,
+        "--json",
+        "-j",
+        help='Planned input JSON, e.g. {"input":{"text":"hi","by_id":"x"}}',
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    mock_port: Optional[int] = typer.Option(None, "--mock-port"),
+    lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+) -> None:
+    """One Hylyre planned input JSON (no VLM)."""
+    loop_cmd.run_input_json(
+        payload_json=payload_json,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+    )
+
+
+@run_app.command("swipe")
+def run_swipe_step(
+    payload_json: str = typer.Option(
+        ...,
+        "--json",
+        "-j",
+        help=(
+            'Planned swipe JSON, e.g. '
+            '\'{"swipe":{"direction":"DOWN","distance":60}}\' '
+            '(prefer swipe.area or --area-by-type Scroll on modal sheets)'
+        ),
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    mock_port: Optional[int] = typer.Option(None, "--mock-port"),
+    lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    area_by_type: Optional[str] = typer.Option(
+        None,
+        "--area-by-type",
+        help="Merge swipe.area.by_type (often Scroll inside bottom-sheet).",
+    ),
+    area_by_text: Optional[str] = typer.Option(
+        None,
+        "--area-by-text",
+        help="Merge swipe.area.by_text (overrides JSON area when set).",
+    ),
+    area_by_id: Optional[str] = typer.Option(
+        None,
+        "--area-by-id",
+        help="Merge swipe.area.by_id (overrides JSON area when set).",
+    ),
+    area_by_key: Optional[str] = typer.Option(
+        None,
+        "--area-by-key",
+        help="Merge swipe.area.by_key (overrides JSON area when set).",
+    ),
+) -> None:
+    """One Hypium directional swipe JSON (no VLM)."""
+    loop_cmd.run_swipe_json(
+        payload_json=payload_json,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+        area_by_type=area_by_type,
+        area_by_text=area_by_text,
+        area_by_id=area_by_id,
+        area_by_key=area_by_key,
+    )
+
+
+@run_app.command("scroll")
+def run_scroll_step(
+    payload_json: str = typer.Option(
+        ...,
+        "--json",
+        "-j",
+        help=(
+            'Mouse-wheel scroll JSON, e.g. '
+            '\'{"scroll":{"direction":"down","steps":5}}\' '
+            'or add --at-by-type Scroll for modal lists'
+        ),
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    mock_port: Optional[int] = typer.Option(None, "--mock-port"),
+    lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    at_by_type: Optional[str] = typer.Option(
+        None,
+        "--at-by-type",
+        help="Merge scroll.at.by_type (e.g. Scroll in bottom-sheet).",
+    ),
+    at_by_text: Optional[str] = typer.Option(
+        None,
+        "--at-by-text",
+        help="Merge scroll.at.by_text (overrides JSON at when set).",
+    ),
+    at_by_id: Optional[str] = typer.Option(
+        None,
+        "--at-by-id",
+        help="Merge scroll.at.by_id (overrides JSON at when set).",
+    ),
+    at_by_key: Optional[str] = typer.Option(
+        None,
+        "--at-by-key",
+        help="Merge scroll.at.by_key (overrides JSON at when set).",
+    ),
+) -> None:
+    """One Hypium mouse_scroll step (vertical; no VLM)."""
+    loop_cmd.run_scroll_json(
+        payload_json=payload_json,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+        at_by_type=at_by_type,
+        at_by_text=at_by_text,
+        at_by_id=at_by_id,
+        at_by_key=at_by_key,
+    )
+
+
+@run_app.command("start-app")
+def run_start_app_step(
+    bundle: str = typer.Option(..., "--bundle", help="Application bundle id."),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    mock_port: Optional[int] = typer.Option(None, "--mock-port"),
+    lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    page_name: Optional[str] = typer.Option(None, "--page-name"),
+    params: str = typer.Option("", "--params"),
+    wait_time: float = typer.Option(1.0, "--wait-time"),
+) -> None:
+    """start_app via Hypium (atomic CLI)."""
+    loop_cmd.run_start_app_cli(
+        bundle=bundle,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+        page_name=page_name,
+        params=params,
+        wait_time=wait_time,
+    )
+
+
+@app.command("screenshot")
+def screenshot_cmd(
+    out: Path = typer.Option(
+        ...,
+        "--out",
+        "-o",
+        help="Output image path (.jpeg or .png).",
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+) -> None:
+    """Capture device screenshot via Hypium (no VLM)."""
+    loop_cmd.run_screenshot_out(device_sn=device_sn, out=out)
+
+
+@app.command("dump-ui")
+def dump_ui_cmd(
+    out: Path = typer.Option(
+        ...,
+        "--out",
+        "-o",
+        help="Output JSON path (Hypium UiTree / uitest dumpLayout).",
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+) -> None:
+    """Dump UI hierarchy JSON for external agents (no VLM)."""
+    loop_cmd.run_dump_ui_out(device_sn=device_sn, out=out)
 
 
 @device_app.command("list")
@@ -226,16 +460,113 @@ def report_verify(
         dir_okay=False,
         readable=True,
     ),
-    plan: Path = typer.Option(
-        ...,
+    plan: Optional[Path] = typer.Option(
+        None,
         "--plan",
         exists=True,
         dir_okay=False,
         readable=True,
+        help="Optional; omit for ad-hoc incremental runs.",
     ),
 ) -> None:
     """Verify test-report.md + trace.json against Hylyre contracts."""
     run_cmd.run_report_verify(report=report, trace=trace, plan=plan)
+
+
+@report_app.command("begin")
+def report_begin(
+    feature: str = typer.Option(..., "--feature", help="Feature slug for trace."),
+    trace_out: Path = typer.Option(
+        ...,
+        "--trace-out",
+        help="Incremental draft trace.json path.",
+    ),
+    plan_path: Optional[Path] = typer.Option(
+        None,
+        "--plan",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Optional reference plan path (metadata only).",
+    ),
+    model_backend: str = typer.Option(
+        "none",
+        "--model-backend",
+        help="Draft trace model_backend field.",
+    ),
+) -> None:
+    """Start incremental trace.json (draft schema) for agent-loop workflows."""
+    run_cmd.run_report_begin(
+        feature=feature,
+        trace_out=trace_out,
+        plan_path=plan_path,
+        model_backend=model_backend,
+    )
+
+
+@report_app.command("record")
+def report_record(
+    trace_path: Path = typer.Option(
+        ...,
+        "--trace",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Draft trace.json from report begin.",
+    ),
+    case_id: str = typer.Option(..., "--case", help="Case id (用例编号)."),
+    name: str = typer.Option(..., "--name", help="Case title."),
+    priority: str = typer.Option(..., "--priority"),
+    ac_ref: str = typer.Option(..., "--ac", help="关联 AC."),
+    status: str = typer.Option(..., "--status", help="通过|失败|阻塞|跳过"),
+    notes: str = typer.Option("", "--notes"),
+) -> None:
+    """Append one case row to incremental trace.json."""
+    run_cmd.run_report_record(
+        trace_path=trace_path,
+        case_id=case_id,
+        name=name,
+        priority=priority,
+        ac_ref=ac_ref,
+        status=status,
+        notes=notes,
+    )
+
+
+@report_app.command("finalize")
+def report_finalize(
+    trace_path: Path = typer.Option(
+        ...,
+        "--trace",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Draft trace.json with recorded cases.",
+    ),
+    report_out: Path = typer.Option(..., "--report-out"),
+    trace_out: Path = typer.Option(..., "--trace-out", help="Final trace.json (L5 schema)."),
+    plan_path: Optional[Path] = typer.Option(
+        None,
+        "--plan",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Optional; verify IDs vs plan when set.",
+    ),
+    model_backend: Optional[str] = typer.Option(
+        None,
+        "--model-backend",
+        help="Override trace model_backend for finalize.",
+    ),
+) -> None:
+    """Render Markdown report + final trace.json and run L5 verify."""
+    run_cmd.run_report_finalize(
+        trace_path=trace_path,
+        plan_path=plan_path,
+        report_out=report_out,
+        trace_write=trace_out,
+        model_backend=model_backend,
+    )
 
 
 @app.command()
