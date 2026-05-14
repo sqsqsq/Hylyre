@@ -89,36 +89,82 @@ def normalize_collect_params(params: dict[str, Any]) -> dict[str, Any]:
         "max_scrolls": int(params.get("max_scrolls") or 10),
         "swipe_distance": int(params.get("swipe_distance") or 60),
         "max_stable_rounds": int(params.get("max_stable_rounds") or 2),
+        "reset_to_top": bool(params.get("reset_to_top")),
+        "bidirectional": bool(params.get("bidirectional")),
     }
     return out
 
 
-async def collect_list_on_agent(
-    agent: HylyreAgent, params: dict[str, Any]
-) -> dict[str, Any]:
-    """Accept either CLI-shaped params (scroll_by_*) or normalized RPC params (scroll_area)."""
-    if "scroll_area" in params:
-        scroll_area = dict(params["scroll_area"])
-        ip = params.get("item_pattern")
-        pattern_re = re.compile(str(ip)) if ip else None
-        max_scrolls = int(params.get("max_scrolls") or 10)
-        swipe_distance = int(params.get("swipe_distance") or 60)
-        stable_need = max(1, int(params.get("max_stable_rounds") or 2))
+def _visible_rows_fingerprint(
+    tree: dict[str, Any],
+    scroll_area: dict[str, str],
+    pattern_re: re.Pattern[str] | None,
+) -> frozenset[tuple[str, str, str]]:
+    scroll_root = find_scroll_root(tree, scroll_area)
+    acc: list[dict[str, Any]] = []
+    if scroll_root is not None:
+        gather_text_items(scroll_root, pattern_re, acc)
     else:
-        p = normalize_collect_params(params)
-        scroll_area = p["scroll_area"]
-        pattern_re = (
-            re.compile(str(p["item_pattern"])) if p.get("item_pattern") else None
-        )
-        max_scrolls = p["max_scrolls"]
-        swipe_distance = p["swipe_distance"]
-        stable_need = max(1, p["max_stable_rounds"])
+        gather_text_items(tree, pattern_re, acc)
+    return frozenset((r["id"], r["key"], r["text"]) for r in acc)
 
-    items: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
+
+async def _swipe_until_viewport_stable(
+    agent: HylyreAgent,
+    *,
+    scroll_area: dict[str, str],
+    direction: str,
+    swipe_distance: int,
+    stable_need: int,
+    max_swipes: int,
+    pattern_re: re.Pattern[str] | None,
+) -> int:
+    """Swipe inside scroll_area until visible Text fingerprint stops changing."""
+    stable = 0
+    prev_fp: frozenset[tuple[str, str, str]] | None = None
+    iterations_done = 0
+    for i in range(max_swipes):
+        iterations_done = i + 1
+        tree_payload = await agent.dump_ui()
+        tree = tree_payload.get("tree") if isinstance(tree_payload, dict) else None
+        if not isinstance(tree, dict):
+            break
+        fp = _visible_rows_fingerprint(tree, scroll_area, pattern_re)
+        scroll_root = find_scroll_root(tree, scroll_area)
+        if prev_fp is not None and fp == prev_fp:
+            stable += 1
+            if stable >= stable_need:
+                break
+        else:
+            stable = 0
+        prev_fp = fp
+        if scroll_root is None:
+            break
+        payload = {
+            "swipe": {
+                "direction": direction,
+                "distance": swipe_distance,
+                "area": dict(scroll_area),
+            }
+        }
+        await agent.run_planned_swipe(payload)
+    return iterations_done
+
+
+async def _collect_merge_direction(
+    agent: HylyreAgent,
+    *,
+    scroll_area: dict[str, str],
+    pattern_re: re.Pattern[str] | None,
+    direction: str,
+    swipe_distance: int,
+    stable_need: int,
+    max_scrolls: int,
+    items: list[dict[str, Any]],
+    seen: set[tuple[str, str, str]],
+) -> int:
     stable = 0
     iterations_done = 0
-
     for i in range(max_scrolls):
         iterations_done = i + 1
         tree_payload = await agent.dump_ui()
@@ -153,18 +199,91 @@ async def collect_list_on_agent(
 
         payload = {
             "swipe": {
-                "direction": "UP",
+                "direction": direction,
                 "distance": swipe_distance,
                 "area": dict(scroll_area),
             }
         }
         await agent.run_planned_swipe(payload)
 
+    return iterations_done
+
+
+async def collect_list_on_agent(
+    agent: HylyreAgent, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Accept either CLI-shaped params (scroll_by_*) or normalized RPC params (scroll_area)."""
+    if "scroll_area" in params:
+        scroll_area = dict(params["scroll_area"])
+        ip = params.get("item_pattern")
+        pattern_re = re.compile(str(ip)) if ip else None
+        max_scrolls = int(params.get("max_scrolls") or 10)
+        swipe_distance = int(params.get("swipe_distance") or 60)
+        stable_need = max(1, int(params.get("max_stable_rounds") or 2))
+        reset_to_top = bool(params.get("reset_to_top"))
+        bidirectional = bool(params.get("bidirectional"))
+    else:
+        p = normalize_collect_params(params)
+        scroll_area = p["scroll_area"]
+        pattern_re = (
+            re.compile(str(p["item_pattern"])) if p.get("item_pattern") else None
+        )
+        max_scrolls = p["max_scrolls"]
+        swipe_distance = p["swipe_distance"]
+        stable_need = max(1, p["max_stable_rounds"])
+        reset_to_top = p["reset_to_top"]
+        bidirectional = p["bidirectional"]
+
+    items: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    iterations_reset = 0
+    if reset_to_top:
+        iterations_reset = await _swipe_until_viewport_stable(
+            agent,
+            scroll_area=scroll_area,
+            direction="DOWN",
+            swipe_distance=swipe_distance,
+            stable_need=stable_need,
+            max_swipes=max_scrolls,
+            pattern_re=pattern_re,
+        )
+
+    iterations_up = await _collect_merge_direction(
+        agent,
+        scroll_area=scroll_area,
+        pattern_re=pattern_re,
+        direction="UP",
+        swipe_distance=swipe_distance,
+        stable_need=stable_need,
+        max_scrolls=max_scrolls,
+        items=items,
+        seen=seen,
+    )
+
+    iterations_down = 0
+    if bidirectional:
+        iterations_down = await _collect_merge_direction(
+            agent,
+            scroll_area=scroll_area,
+            pattern_re=pattern_re,
+            direction="DOWN",
+            swipe_distance=swipe_distance,
+            stable_need=stable_need,
+            max_scrolls=max_scrolls,
+            items=items,
+            seen=seen,
+        )
+
     return {
         "items": items,
-        "iterations": iterations_done,
+        "iterations": iterations_reset + iterations_up + iterations_down,
+        "iterations_reset": iterations_reset,
+        "iterations_up": iterations_up,
+        "iterations_down": iterations_down,
         "unique_count": len(items),
         "scroll_area": scroll_area,
+        "reset_to_top": reset_to_top,
+        "bidirectional": bidirectional,
     }
 
 
@@ -211,6 +330,8 @@ def run_collect_list_cli(
     max_scrolls: int,
     swipe_distance: int,
     max_stable_rounds: int,
+    reset_to_top: bool,
+    bidirectional: bool,
 ) -> None:
     import typer
 
@@ -223,6 +344,8 @@ def run_collect_list_cli(
         "max_scrolls": max_scrolls,
         "swipe_distance": swipe_distance,
         "max_stable_rounds": max_stable_rounds,
+        "reset_to_top": reset_to_top,
+        "bidirectional": bidirectional,
     }
     opts = [
         scroll_by_type,

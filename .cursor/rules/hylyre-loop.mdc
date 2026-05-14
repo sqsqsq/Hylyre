@@ -13,6 +13,7 @@ alwaysApply: false
 3. **执行**：生成 **[做法 A](docs/agent-plan-a.md)** 允许的 JSON（根键 `action` / `touch` / `input` / **`swipe`** / **`scroll`**），或使用 **`hylyre run action|tap|input|swipe|scroll`**（及 MCP **等价工具**，包括 **`hylyre_run_swipe`** / **`hylyre_run_scroll`**）。
 4. **报告**：长会话用 `hylyre report begin|record|finalize` 或 MCP `hylyre_report_*`；批量回归仍可用 `hylyre run --plan …` / `hylyre_run_plan`。
 5. **自然语言未写手势时**：必读 **`docs/agent-loop.md`** 中的 **「自然语言未约定手势时」** 一节：先 **`dump-ui`** 再决定是否滑动；结合 **`_hylyre_hints`**；竖向列表在 **`Scroll` 内**露出下方条目优先 **`UP`**；半屏列表必须 **`area` / `at`**；滑动后对比相邻 **`dump-ui`**，树不变则调整参数而非直接下结论；能用 **`collect-list`** 枚举时不要手写长循环。
-6. **批处理优先**：仅当用户明确要求「整份 test-plan 一次性跑完」时才主推做法 A + `hylyre run --plan`。
+6. **已知 bundle 的知识优先**：先 **`app page load` + `app find`**（或 MCP **`hylyre_app_page_load`** / **`hylyre_app_find`**）；缓存不足以决策时再 **`dump-ui`**；新页面探索结束后 **`app page save`**（详见 **`docs/app-knowledge.md`** / **`docs/agent-loop.md`**「Knowledge-first loop」）。
+7. **批处理优先**：仅当用户明确要求「整份 test-plan 一次性跑完」时才主推做法 A + `hylyre run --plan`。
 
-不要默认假设你能「看见」用户 App；必须先 dump-ui 或截图（或用户给出稳定 `by_id`/`by_text`）。
+不要默认假设你能「看见」用户 App；必须先 dump-ui 或截图（或用户给出稳定 `by_id`/`by_text`，或命中 **`app find`** 索引）。

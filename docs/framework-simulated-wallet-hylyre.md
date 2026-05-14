@@ -29,6 +29,16 @@ Hypium 原子 CLI 默认每条命令完整 **connect/disconnect**，耗时常被
 
 同时阅读 **`dump-ui` 根字段 `_hylyre_hints`**：若出现 **`likely_more_content_below`**，说明控件树提示仍有屏外内容，**禁止**仅凭首张 dump 断言「已全部枚举」。
 
+## App 知识：`app page` + `find`
+
+减少 **`com.huawei.hmos.wallet`** 等主页 **数百 KB** 整树 JSON 的重复传输：
+
+- **第一轮（探索）**：照常 `dump-ui`（可加 `--filter-text` / `--summary`）与 `collect-list`；到达稳定页后：  
+  `hylyre app page save -S $SF --bundle com.huawei.hmos.wallet --name <slug> --auto-fingerprint --store-dir ./cache/apps`
+- **第二轮（回归）**：优先 **`hylyre app page load`** + **`hylyre app find --by-text "…"`** 取出 `by_id`/`by_key`，直接 **`hylyre run tap`**；尽量 **不再调用整树 `dump-ui`**，端到端耗时可明显下降（目标 ≥50% 降幅，依设备与网络而异）。
+
+Framework 子进程请固定 **`--store-dir`**；Cursor MCP 默认可用仓库下 **`.hylyre/apps`**。详见 **[app-knowledge.md](./app-knowledge.md)**、**[agent-loop.md](./agent-loop.md)**「Knowledge-first loop」。
+
 ## 文档索引
 
 - 原子循环总览：**[agent-loop.md](./agent-loop.md)**（session、`collect-list`、`_hylyre_hints`、半屏 `swipe.area` 纪律）

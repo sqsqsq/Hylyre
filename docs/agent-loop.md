@@ -2,6 +2,19 @@
 
 外部 Agent（Cursor、Claude、内部编排器等）承担「看图 / 读控件树 → 规划 JSON → 断言」；Hylyre 负责 **真机执行 + 报告产物**。与 [做法 A：JSON 测试步骤](./agent-plan-a.md) 的区别：循环模式 **逐步** 探测界面再执行；做法 A 适合 **事先已知** `by_id` / `by_text` 的回归计划。
 
+更多：**[app-knowledge.md](./app-knowledge.md)**（页面快照仓、`find`、指纹、存储路径解析）。
+
+## Knowledge-first loop（已知 App）
+
+对 **反复调试同一 bundle** 时，在每次 **`dump-ui` 整树** 之前：
+
+1. **`hylyre app page load --bundle <id> --name <slug>`**（或 MCP **`hylyre_app_page_load`**）：若命中缓存，可直接把 **`tree` / `key_elements`** 交给 planner。
+2. **`hylyre app find --bundle <id> --by-text "…"`**（或 **`hylyre_app_find`**）：在已 **`save`** 过的索引里反查 selector，无需当前设备 dump。
+3. **仅在缓存缺失或指纹不匹配时**再 **`dump-ui`**；需要大图时可加 **`--filter-*` / `--summary`** 缩小 JSON。
+4. **探索到新稳定页面后**执行 **`hylyre app page save`**（或 MCP **`hylyre_app_page_save`**），并可选 **`--auto-fingerprint`**，便于下次 **`app page diff --against current`** 判断是否漂移。
+
+Framework / CI 请固定 **`--store-dir`** 或 **`HYLYRE_APP_STORE_DIR`**，与 Cursor 默认 `./.hylyre/apps` 区分开。
+
 ## UI 事实源（dump-ui 实现）
 
 真机上 **`hylyre dump-ui`** / MCP **`hylyre_dump_ui`** 使用 **Hypium `UiTree.refresh()`**，底层走设备侧 **`uitest dumpLayout`**（由 Hypium 拉起），落地为 JSON 控件树。无需单独配置 `hdc uitest` 子命令；仅需 `hylyre[device]` + 可用 `hdc` 设备。
@@ -41,6 +54,8 @@ hylyre report verify --report report.md --trace trace.json
 - `hylyre_dump_ui` / `hylyre_screenshot`（可选 `session_id`）
 - `hylyre_run_action` / `hylyre_run_tap` / `hylyre_run_input` / **`hylyre_run_swipe`** / **`hylyre_run_scroll`** / `hylyre_start_app`
 - **`hylyre_collect_list`**：在半屏列表里滚到底并合并所有可见 **`Text`** 行（可选正则过滤）；等价 CLI：`hylyre collect-list`
+- **`hylyre_find`**：当前屏控件树扁平查找；返回 **`hits`** + 根级 **`_hylyre_hints`**（与 `dump-ui` 同源滚动信号），便于不走整树 dump 时仍能判断是否该转 **`collect-list`**。
+- **`hylyre_app_page_*`** / **`hylyre_app_find`** / **`hylyre_app_fingerprint`**：App 知识持久化（见 **[app-knowledge.md](./app-knowledge.md)**）
 - `hylyre_report_begin` → `hylyre_report_record`（传入 `trace_state` JSON）→ `hylyre_report_finalize`
 - 可选：`hylyre_open_session` 后把同一 `session_id` 传给上述工具，减少重复连接。
 
@@ -71,10 +86,18 @@ hylyre report verify --report report.md --trace trace.json
 
 对匹配到的滚动容器执行 **`swipe` UP（限定 `area`）→ `dump-ui` → 文本去重合并**，直到连续 **`--max-stable-rounds`** 轮无新增 **`Text`** 行或达到 **`--max-scrolls`**：
 
-- **CLI**：`hylyre collect-list [--session FILE] [--scroll-by-type Scroll] [--scroll-by-id …] [--item-pattern REGEX] [--out merged.json]`
-- **MCP**：`hylyre_collect_list`，参数 `session_path`（CLI 会话文件）或 `device_sn`（一次性连接）。
+- **CLI**：`hylyre collect-list [--session FILE] [--scroll-by-type Scroll] [--scroll-by-id …] [--item-pattern REGEX] [--reset-to-top] [--bidirectional] [--out merged.json]`
+- **MCP**：`hylyre_collect_list`，参数 `session_path`（CLI 会话文件）或 `device_sn`（一次性连接）；可选 **`reset_to_top`**、**`bidirectional`**。
 
 默认收集 **`Text`** 叶节点字符串；**`--item-pattern`** 对 `id|key|text` 拼接串做正则过滤。
+
+**输出字段补充**：结果 JSON 含 **`iterations_up`** / **`iterations_down`** / **`iterations_reset`**（仅在 **`--reset-to-top`** 时可能 >0）以及 **`reset_to_top` / `bidirectional` 布尔**，便于排查「滚了几轮、是否在相位重置」。
+
+**何时加 `--reset-to-top`**：进入半屏 Sheet / 列表后 **滚动位置不确定**（例如从中间状态 resume），先在 **`Scroll` 限定区域内**反复 **`DOWN`** 直到可见 **`Text` 指纹稳定**，再执行常规 **`UP` 合并**，减少漏掉视口上方条目。
+
+**何时加 `--bidirectional`**：在完成 **`UP` pass** 后，再从当前位置 **`DOWN` 合并一轮直到稳定**，用于补齐 **`UP` 起始位置之上**曾落在屏外的项（与 **`reset-to-top`** 互补：`reset` 偏向先到稳定顶端，`bidirectional` 偏向双向扫一遍）。
+
+**默认**：两者均为 **false**，行为与旧版一致。
 
 ## 列表与滚屏（`swipe` / `scroll`）
 

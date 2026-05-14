@@ -19,7 +19,7 @@ alwaysApply: true
 当用户要「不配运行态 VLM」时：
 
 - **回归计划 / 已知 selector**：**做法 A** — 编写或修改 **`*test-plan*.md`**（规约见 **`docs/agent-plan-a.md`**、`hylyre-plan-a.mdc`）。
-- **先感知界面再逐步执行**：**原子循环** — **`docs/agent-loop.md`**（含 **`_hylyre_hints`**、**`collect-list`**、**「自然语言未约定手势时」**：未写滑动时先 dump、再在 `Scroll` 内用 **`UP` 等** + **`area`/`at`** 并校验相邻 dump）。CLI 与 MCP 镜像。
+- **先感知界面再逐步执行**：**原子循环** — **`docs/agent-loop.md`**（含 **`_hylyre_hints`**、**`collect-list`**、**Knowledge-first** 下的 **`app page load` / `app find`**（见 **`docs/app-knowledge.md`**）、**「自然语言未约定手势时」**：未写滑动时先 dump、再在 `Scroll` 内用 **`UP` 等** + **`area`/`at`** 并校验相邻 dump）。CLI 与 MCP 镜像。
 
 ## 常用参数意图
 

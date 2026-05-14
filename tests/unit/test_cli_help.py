@@ -19,6 +19,15 @@ SUBCOMMANDS = [
     ["run", "start-app", "--help"],
     ["screenshot", "--help"],
     ["dump-ui", "--help"],
+    ["find", "--help"],
+    ["app", "--help"],
+    ["app", "find", "--help"],
+    ["app", "fingerprint", "--help"],
+    ["app", "page", "save", "--help"],
+    ["app", "page", "load", "--help"],
+    ["app", "page", "list", "--help"],
+    ["app", "page", "delete", "--help"],
+    ["app", "page", "diff", "--help"],
     ["mock", "--help"],
     ["mock", "start", "--help"],
     ["mock", "stop", "--help"],
@@ -102,5 +111,7 @@ def test_main_help_lists_expected_groups() -> None:
         "ai",
         "screenshot",
         "dump-ui",
+        "find",
+        "app",
     ):
         assert name in out, f"missing top-level command {name!r} in:\n{out}"

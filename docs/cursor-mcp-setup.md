@@ -1,6 +1,6 @@
 # Cursor 中一次性启用 Hylyre MCP
 
-配置完成后，Agent 可直接调用 **`hylyre_run_plan`**、**`hylyre_doctor`**、**`hylyre_dump_ui`**、**`hylyre_run_swipe`** / **`hylyre_run_scroll`** 等工具，无需在每轮对话里复述 CLI 用法（完整清单见 Cursor 工具列表或仓库 **`tests/unit/test_mcp_server.py`**）。
+配置完成后，Agent 可直接调用 **`hylyre_run_plan`**、**`hylyre_doctor`**、**`hylyre_dump_ui`**、**`hylyre_find`**、**`hylyre_app_*`**、**`hylyre_run_swipe`** / **`hylyre_run_scroll`** 等工具，无需在每轮对话里复述 CLI 用法（完整清单见 Cursor 工具列表或仓库 **`tests/unit/test_mcp_server.py`**）。
 
 ## 前提
 

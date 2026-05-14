@@ -9,6 +9,8 @@ from typing import Any, Awaitable, Callable, TypeVar
 
 from hylyre.api.agent import HylyreAgent
 from hylyre.drivers.hypium import HypiumDriver
+from hylyre.ui_dump_filter import DumpFilterSpec, apply_ui_dump_filter
+from hylyre.ui_dump_hints import augment_ui_dump_payload
 from hylyre.wiring import create_hypium_agent
 
 _T = TypeVar("_T")
@@ -97,20 +99,23 @@ def execute_dump_ui_dict(
     *,
     device_sn: str | None = None,
     session_file: Path | None = None,
+    dump_filter: DumpFilterSpec | None = None,
 ) -> dict[str, Any]:
-    """Return structured UI tree JSON."""
+    """Return structured UI tree JSON (default: minimal attrs; use ``full=True`` for raw Hypium)."""
     if session_file is not None:
-        return _session_ipc(session_file, "dump_ui", {})
+        raw = _session_ipc(session_file, "dump_ui", {})
+    else:
 
-    from hylyre.ui_dump_hints import augment_ui_dump_payload
+        async def _dump(driver: HypiumDriver) -> dict[str, Any]:
+            return await driver.dump_ui()
 
-    async def _dump(driver: HypiumDriver) -> dict[str, Any]:
-        return await driver.dump_ui()
+        raw = asyncio.run(_with_hypium_driver(device_sn=device_sn, fn=_dump))
 
-    raw = asyncio.run(_with_hypium_driver(device_sn=device_sn, fn=_dump))
-    if isinstance(raw, dict):
-        return augment_ui_dump_payload(raw)
-    return raw
+    if not isinstance(raw, dict):
+        return raw
+    augmented = augment_ui_dump_payload(raw)
+    spec = dump_filter if dump_filter is not None else DumpFilterSpec(full=False)
+    return apply_ui_dump_filter(augmented, spec)
 
 
 def execute_dump_ui_file(
@@ -118,8 +123,11 @@ def execute_dump_ui_file(
     device_sn: str | None,
     out: Path,
     session_file: Path | None = None,
+    dump_filter: DumpFilterSpec | None = None,
 ) -> str:
-    payload = execute_dump_ui_dict(device_sn=device_sn, session_file=session_file)
+    payload = execute_dump_ui_dict(
+        device_sn=device_sn, session_file=session_file, dump_filter=dump_filter
+    )
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -386,12 +394,16 @@ def run_dump_ui_out(
     device_sn: str | None,
     out: Path,
     session_file: Path | None = None,
+    dump_filter: DumpFilterSpec | None = None,
 ) -> None:
     import typer
 
     try:
         path = execute_dump_ui_file(
-            device_sn=device_sn, out=out, session_file=session_file
+            device_sn=device_sn,
+            out=out,
+            session_file=session_file,
+            dump_filter=dump_filter,
         )
     except ImportError as e:
         typer.secho(str(e), err=True)

@@ -74,6 +74,7 @@ def build_mcp():  # type: ignore[no-untyped-def]
             "Safer CI path: hylyre_run_plan use_fakes=true. "
             "Agent-loop (no VLM): dump_ui / screenshot / run_* JSON "
             "(action tap input swipe scroll) + report_* . "
+            "App knowledge: hylyre_find, hylyre_app_* page CRUD + hylyre_app_find / fingerprint. "
             "hylyre_open_session reuses Hypium for faster MCP loops; optional for parity with CLI."
         ),
     )
@@ -83,6 +84,42 @@ def build_mcp():  # type: ignore[no-untyped-def]
         if sess is None:
             raise ValueError(f"unknown session_id {session_id!r}")
         return sess.agent
+
+    async def _live_ui_payload_full(
+        *,
+        session_id: str | None,
+        session_path: str | None,
+        device_sn: str | None,
+    ) -> dict[str, Any]:
+        """Augmented dump with full Hypium attrs (for save / find / fingerprint)."""
+        from hylyre.ui_dump_filter import DumpFilterSpec, apply_ui_dump_filter
+
+        modes = sum(bool(x) for x in (session_id, session_path, device_sn))
+        if modes > 1:
+            raise ValueError(
+                "pass at most one of session_id, session_path, device_sn "
+                "(omit device_sn when using MCP session_id)"
+            )
+        if modes == 0:
+            raise ValueError(
+                "pass exactly one of session_id, session_path, device_sn"
+            )
+        if session_id:
+            agent = _session_agent(session_id)
+            payload = await agent.dump_ui()
+            return apply_ui_dump_filter(payload, DumpFilterSpec(full=True))
+        import anyio
+
+        sess = Path(session_path) if session_path else None
+
+        def _sync_dump() -> dict[str, Any]:
+            return loop_cmd.execute_dump_ui_dict(
+                device_sn=device_sn,
+                session_file=sess,
+                dump_filter=DumpFilterSpec(full=True),
+            )
+
+        return await anyio.to_thread.run_sync(_sync_dump)
 
     @mcp.tool(
         name="hylyre_run_plan",
@@ -210,21 +247,58 @@ def build_mcp():  # type: ignore[no-untyped-def]
         name="hylyre_dump_ui",
         description=(
             "Hypium UiTree JSON for non-multimodal planners; "
-            "session_id or device_sn."
+            "session_id or device_sn. Default minimal attrs; use full=true for raw."
         ),
     )
     async def hylyre_dump_ui(
         device_sn: str | None = None,
         session_id: str | None = None,
+        filter_text: str | None = None,
+        filter_id: str | None = None,
+        filter_key: str | None = None,
+        keep_clickable: bool = False,
+        keep_scrollable: bool = False,
+        max_depth: int | None = None,
+        keep_attrs: str | None = None,
+        prune_attrs: str | None = None,
+        full: bool = False,
+        summary: bool = False,
     ) -> str:
+        from hylyre.ui_dump_filter import DumpFilterSpec, apply_ui_dump_filter
+
+        kattrs = (
+            frozenset(x.strip() for x in keep_attrs.split(",") if x.strip())
+            if keep_attrs
+            else frozenset()
+        )
+        pattrs = (
+            frozenset(x.strip() for x in prune_attrs.split(",") if x.strip())
+            if prune_attrs
+            else frozenset()
+        )
+        spec = DumpFilterSpec(
+            filter_text=filter_text,
+            filter_id=filter_id,
+            filter_key=filter_key,
+            keep_clickable=keep_clickable,
+            keep_scrollable=keep_scrollable,
+            max_depth=max_depth,
+            keep_attrs=kattrs,
+            prune_attrs=pattrs,
+            full=full,
+            summary=summary,
+        )
         if session_id:
             agent = _session_agent(session_id)
             tree = await agent.dump_ui()
+            tree = apply_ui_dump_filter(tree, spec)
         else:
             import anyio
 
             tree = await anyio.to_thread.run_sync(
-                lambda: loop_cmd.execute_dump_ui_dict(device_sn=device_sn)
+                lambda: loop_cmd.execute_dump_ui_dict(
+                    device_sn=device_sn, dump_filter=spec
+                )
             )
         return json.dumps(tree, ensure_ascii=False)
 
@@ -561,7 +635,9 @@ def build_mcp():  # type: ignore[no-untyped-def]
         name="hylyre_collect_list",
         description=(
             "Swipe UP in scroll area and merge Text rows until stable "
-            "(virtualized sheets). session_id, session_path, or device_sn."
+            "(virtualized sheets). Optional reset_to_top (DOWN until stable) "
+            "and bidirectional (extra DOWN pass). "
+            "session_id, session_path, or device_sn."
         ),
     )
     async def hylyre_collect_list(
@@ -578,6 +654,8 @@ def build_mcp():  # type: ignore[no-untyped-def]
         max_scrolls: int = 10,
         swipe_distance: int = 60,
         max_stable_rounds: int = 2,
+        reset_to_top: bool = False,
+        bidirectional: bool = False,
     ) -> str:
         from hylyre.cli.commands import collect_cmd
 
@@ -597,6 +675,8 @@ def build_mcp():  # type: ignore[no-untyped-def]
             "max_scrolls": max_scrolls,
             "swipe_distance": swipe_distance,
             "max_stable_rounds": max_stable_rounds,
+            "reset_to_top": reset_to_top,
+            "bidirectional": bidirectional,
         }
 
         if session_id:
@@ -617,6 +697,245 @@ def build_mcp():  # type: ignore[no-untyped-def]
             )
         )
         return json.dumps(result, ensure_ascii=False)
+
+    @mcp.tool(
+        name="hylyre_find",
+        description=(
+            "Flat search on live UI dump (max 50). "
+            "Returns JSON hits plus root _hylyre_hints (scroll signals). "
+            "Pass session_id, session_path, or device_sn; "
+            "plus by_text and/or by_id_pattern/by_key_pattern."
+        ),
+    )
+    async def hylyre_find(
+        session_id: str | None = None,
+        session_path: str | None = None,
+        device_sn: str | None = None,
+        by_text: str | None = None,
+        by_id_pattern: str | None = None,
+        by_key_pattern: str | None = None,
+        limit: int = 50,
+    ) -> str:
+        from hylyre.cli.commands.find_cmd import find_in_payload
+
+        if not any((by_text, by_id_pattern, by_key_pattern)):
+            raise ValueError(
+                "pass at least one of by_text, by_id_pattern, by_key_pattern"
+            )
+        payload = await _live_ui_payload_full(
+            session_id=session_id,
+            session_path=session_path,
+            device_sn=device_sn,
+        )
+        result = find_in_payload(
+            payload,
+            by_text=by_text,
+            by_id_pattern=by_id_pattern,
+            by_key_pattern=by_key_pattern,
+            limit=limit,
+        )
+        return json.dumps(result, ensure_ascii=False)
+
+    @mcp.tool(
+        name="hylyre_app_page_save",
+        description=(
+            "Save named UI page snapshot + refresh bundle index. "
+            "from_dump path XOR session_id/session_path/device_sn."
+        ),
+    )
+    async def hylyre_app_page_save(
+        bundle: str,
+        name: str,
+        store_dir: str | None = None,
+        ability_name: str | None = None,
+        app_version: str | None = None,
+        from_dump: str | None = None,
+        session_id: str | None = None,
+        session_path: str | None = None,
+        device_sn: str | None = None,
+        auto_fingerprint: bool = False,
+    ) -> str:
+        from hylyre.app_store.page_store import save_page_snapshot
+        from hylyre.app_store.paths import resolve_write_dir
+
+        if from_dump:
+            if any((session_id, session_path, device_sn)):
+                raise ValueError(
+                    "from_dump is mutually exclusive with session_id/session_path/device_sn"
+                )
+            payload = json.loads(Path(from_dump).read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("from_dump JSON must be an object")
+        else:
+            payload = await _live_ui_payload_full(
+                session_id=session_id,
+                session_path=session_path,
+                device_sn=device_sn,
+            )
+        write_root = resolve_write_dir(store_dir)
+        path = save_page_snapshot(
+            store_dir=write_root,
+            bundle=bundle,
+            page_name=name,
+            tree_payload=payload,
+            ability_name=ability_name,
+            app_version=app_version,
+            auto_fingerprint=auto_fingerprint,
+        )
+        return json.dumps({"path": str(path.resolve())}, ensure_ascii=False)
+
+    @mcp.tool(
+        name="hylyre_app_page_load",
+        description="Load saved page snapshot JSON (searches store dirs until found).",
+    )
+    def hylyre_app_page_load(
+        bundle: str,
+        name: str,
+        store_dir: str | None = None,
+    ) -> str:
+        from hylyre.app_store.page_store import load_page_snapshot
+        from hylyre.app_store.paths import resolve_read_dirs
+
+        last_err: Exception | None = None
+        for d in resolve_read_dirs(store_dir):
+            try:
+                snap = load_page_snapshot(d, bundle, name)
+                return json.dumps(snap, ensure_ascii=False)
+            except FileNotFoundError as e:
+                last_err = e
+                continue
+        raise FileNotFoundError(str(last_err or "snapshot not found"))
+
+    @mcp.tool(
+        name="hylyre_app_page_list",
+        description="List saved page slugs for bundle (union across readable store dirs).",
+    )
+    def hylyre_app_page_list(
+        bundle: str,
+        store_dir: str | None = None,
+    ) -> str:
+        from hylyre.app_store.page_store import list_page_snapshots
+        from hylyre.app_store.paths import resolve_read_dirs
+
+        names: set[str] = set()
+        for d in resolve_read_dirs(store_dir):
+            names.update(list_page_snapshots(d, bundle))
+        return json.dumps(sorted(names), ensure_ascii=False)
+
+    @mcp.tool(
+        name="hylyre_app_page_diff",
+        description=(
+            "Compare saved page fingerprint vs live dump or JSON file. "
+            "against=current needs session_id/session_path/device_sn."
+        ),
+    )
+    async def hylyre_app_page_diff(
+        bundle: str,
+        name: str,
+        against: str = "current",
+        session_id: str | None = None,
+        session_path: str | None = None,
+        device_sn: str | None = None,
+        store_dir: str | None = None,
+    ) -> str:
+        from hylyre.app_store.page_store import diff_snapshots, load_page_snapshot
+        from hylyre.app_store.paths import resolve_read_dirs
+
+        snap = None
+        for d in resolve_read_dirs(store_dir):
+            try:
+                snap = load_page_snapshot(d, bundle, name)
+                break
+            except FileNotFoundError:
+                continue
+        if snap is None:
+            raise FileNotFoundError("snapshot not found")
+        if against == "current":
+            cur = await _live_ui_payload_full(
+                session_id=session_id,
+                session_path=session_path,
+                device_sn=device_sn,
+            )
+        else:
+            cur_raw = json.loads(Path(against).read_text(encoding="utf-8"))
+            if not isinstance(cur_raw, dict):
+                raise ValueError("against file must be a JSON object")
+            cur = cur_raw
+        out = diff_snapshots(snap, cur)
+        return json.dumps(out, ensure_ascii=False)
+
+    @mcp.tool(
+        name="hylyre_app_page_delete",
+        description="Delete saved page snapshot and prune bundle index (write dir only).",
+    )
+    def hylyre_app_page_delete(
+        bundle: str,
+        name: str,
+        store_dir: str | None = None,
+    ) -> str:
+        from hylyre.app_store.page_store import delete_page_snapshot
+        from hylyre.app_store.paths import resolve_write_dir
+
+        delete_page_snapshot(resolve_write_dir(store_dir), bundle, name)
+        return json.dumps({"status": "ok"}, ensure_ascii=False)
+
+    @mcp.tool(
+        name="hylyre_app_find",
+        description=(
+            "Search merged bundle index across readable dirs "
+            "(by_text substring / by_id_pattern regex)."
+        ),
+    )
+    def hylyre_app_find(
+        bundle: str,
+        by_text: str | None = None,
+        by_id_pattern: str | None = None,
+        store_dir: str | None = None,
+    ) -> str:
+        from hylyre.app_store.cross_find import search_all_indexes
+
+        hits = search_all_indexes(
+            bundle,
+            by_text=by_text,
+            by_id_pattern=by_id_pattern,
+            store_dir=store_dir,
+        )
+        return json.dumps(hits, ensure_ascii=False)
+
+    @mcp.tool(
+        name="hylyre_app_fingerprint",
+        description=(
+            "SHA256 fingerprint from structural (type,id,key) triples. "
+            "from_dump XOR session_id/session_path/device_sn."
+        ),
+    )
+    async def hylyre_app_fingerprint(
+        from_dump: str | None = None,
+        session_id: str | None = None,
+        session_path: str | None = None,
+        device_sn: str | None = None,
+    ) -> str:
+        from hylyre.app_store.fingerprint import compute_ui_fingerprint
+
+        if from_dump:
+            if any((session_id, session_path, device_sn)):
+                raise ValueError(
+                    "from_dump is mutually exclusive with session_id/session_path/device_sn"
+                )
+            payload = json.loads(Path(from_dump).read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("from_dump JSON must be an object")
+        else:
+            payload = await _live_ui_payload_full(
+                session_id=session_id,
+                session_path=session_path,
+                device_sn=device_sn,
+            )
+        tree = payload.get("tree")
+        if not isinstance(tree, dict):
+            raise ValueError("payload missing tree dict")
+        fp, lines = compute_ui_fingerprint(tree)
+        return json.dumps({"fingerprint": fp, "inputs": lines}, ensure_ascii=False)
 
     @mcp.tool(
         name="hylyre_progress_show",

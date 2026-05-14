@@ -9,10 +9,12 @@ import typer
 
 from hylyre.cli.commands import (
     ai_cmd,
+    app_cmd,
     bootstrap_cmd,
     collect_cmd,
     device as device_cmd,
     doctor as doctor_cmd,
+    find_cmd,
     loop_cmd,
     mock_cmd,
     progress_cmd,
@@ -20,6 +22,7 @@ from hylyre.cli.commands import (
     session_cmd,
     spec_cmd,
 )
+from hylyre.ui_dump_filter import DumpFilterSpec
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -54,6 +57,8 @@ session_app = typer.Typer(
     help="Persistent Hypium TCP session — reuse connection across atomic CLI calls.",
 )
 app.add_typer(session_app, name="session")
+
+app.add_typer(app_cmd.app_cli, name="app")
 
 
 @progress_app.callback(invoke_without_command=True)
@@ -530,9 +535,114 @@ def dump_ui_cmd(
         "-S",
         help="Session JSON from `hylyre session start` (reuse Hypium connection).",
     ),
+    filter_text: Optional[str] = typer.Option(
+        None,
+        "--filter-text",
+        help="Regex; keep matching nodes and ancestor chains.",
+    ),
+    filter_id: Optional[str] = typer.Option(
+        None,
+        "--filter-id",
+        help="Regex against element id.",
+    ),
+    filter_key: Optional[str] = typer.Option(
+        None,
+        "--filter-key",
+        help="Regex against element key.",
+    ),
+    keep_clickable: bool = typer.Option(
+        False,
+        "--keep-clickable",
+        help="Keep subtrees containing clickable=true nodes.",
+    ),
+    keep_scrollable: bool = typer.Option(
+        False,
+        "--keep-scrollable",
+        help="Keep subtrees containing scrollable=true nodes.",
+    ),
+    max_depth: Optional[int] = typer.Option(
+        None,
+        "--max-depth",
+        min=0,
+        help="Clip UI tree depth from root.",
+    ),
+    keep_attrs: Optional[str] = typer.Option(
+        None,
+        "--keep-attrs",
+        help="Comma-separated attribute names to add beyond minimal set.",
+    ),
+    prune_attrs: Optional[str] = typer.Option(
+        None,
+        "--prune-attrs",
+        help="Comma-separated attribute names to remove from minimal output.",
+    ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Emit full Hypium attributes (disable minimal trimming).",
+    ),
+    summary: bool = typer.Option(
+        False,
+        "--summary",
+        help="Flat text-bearing rows instead of tree (drops tree body).",
+    ),
 ) -> None:
     """Dump UI hierarchy JSON for external agents (no VLM)."""
-    loop_cmd.run_dump_ui_out(device_sn=device_sn, out=out, session_file=session)
+    kattrs = (
+        frozenset(x.strip() for x in keep_attrs.split(",") if x.strip())
+        if keep_attrs
+        else frozenset()
+    )
+    pattrs = (
+        frozenset(x.strip() for x in prune_attrs.split(",") if x.strip())
+        if prune_attrs
+        else frozenset()
+    )
+    spec = DumpFilterSpec(
+        filter_text=filter_text,
+        filter_id=filter_id,
+        filter_key=filter_key,
+        keep_clickable=keep_clickable,
+        keep_scrollable=keep_scrollable,
+        max_depth=max_depth,
+        keep_attrs=kattrs,
+        prune_attrs=pattrs,
+        full=full,
+        summary=summary,
+    )
+    loop_cmd.run_dump_ui_out(
+        device_sn=device_sn, out=out, session_file=session, dump_filter=spec
+    )
+
+
+@app.command("find")
+def find_elements_cmd(
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start`.",
+    ),
+    by_text: Optional[str] = typer.Option(None, "--by-text"),
+    by_id_pattern: Optional[str] = typer.Option(None, "--by-id-pattern"),
+    by_key_pattern: Optional[str] = typer.Option(None, "--by-key-pattern"),
+    limit: int = typer.Option(
+        50,
+        "--limit",
+        min=1,
+        help="Max hits (default 50).",
+    ),
+) -> None:
+    """Search live UI tree for matching nodes; prints JSON with hits + _hylyre_hints."""
+    find_cmd.run_find_cli(
+        device_sn=device_sn,
+        session_file=session,
+        by_text=by_text,
+        by_id_pattern=by_id_pattern,
+        by_key_pattern=by_key_pattern,
+        limit=limit,
+    )
 
 
 @app.command("collect-list")
@@ -595,6 +705,22 @@ def collect_list_cmd(
         min=1,
         help="Stop after N consecutive dumps with no new Text rows.",
     ),
+    reset_to_top: bool = typer.Option(
+        False,
+        "--reset-to-top",
+        help=(
+            "Before collecting, swipe DOWN inside the scroll area until the visible "
+            "Text fingerprint stabilizes (helps when list position is unknown)."
+        ),
+    ),
+    bidirectional: bool = typer.Option(
+        False,
+        "--bidirectional",
+        help=(
+            "After the UP pass, swipe DOWN and merge again until stable "
+            "(captures rows above the starting viewport)."
+        ),
+    ),
 ) -> None:
     """Swipe UP inside a scroll container and merge Text rows until stable."""
     collect_cmd.run_collect_list_cli(
@@ -611,6 +737,8 @@ def collect_list_cmd(
         max_scrolls=max_scrolls,
         swipe_distance=swipe_distance,
         max_stable_rounds=max_stable_rounds,
+        reset_to_top=reset_to_top,
+        bidirectional=bidirectional,
     )
 
 
