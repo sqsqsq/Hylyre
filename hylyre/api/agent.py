@@ -7,6 +7,7 @@ import time
 from typing import Any
 
 from hylyre.drivers.base import MockControllerBase, UiDriverBase, VlmClientBase
+from hylyre.ui_dump_hints import augment_ui_dump_payload
 
 
 class HylyreAgent:
@@ -50,6 +51,10 @@ class HylyreAgent:
             await self._ui.connect()
             self._ui_connected = True
 
+    async def ensure_connected(self) -> None:
+        """Connect Hypium once; safe for session daemons and MCP ``open_session``."""
+        await self._ensure_ui()
+
     async def aclose(self) -> None:
         if self._ui_connected:
             await self._ui.close()
@@ -71,7 +76,10 @@ class HylyreAgent:
     async def dump_ui(self) -> dict[str, Any]:
         """Return structured UI tree for external agents (no VLM)."""
         await self._ensure_ui()
-        return await self._ui.dump_ui()
+        raw = await self._ui.dump_ui()
+        if isinstance(raw, dict):
+            return augment_ui_dump_payload(raw)
+        return raw
 
     async def mock_activate_group(self, group_id: str) -> None:
         if self._mock is None:
