@@ -12,14 +12,14 @@ alwaysApply: true
 ## 调用方式（按优先级）
 
 1. **若当前会话已连接 Hylyre MCP**（工具名形如 `hylyre_run_plan`、`hylyre_doctor`）：优先用 MCP，路径参数用**绝对路径**。
-2. **否则**：在**仓库根目录**执行 **`python -m hylyre …`**（与 CLI `--help` 一致）。**能力与 MCP 对等**（MCP 仅为薄壳；`hylyre_open_session` 例外见 **`docs/agent-loop.md`**）。
+2. **否则**：在**仓库根目录**执行 **`python -m hylyre …`**（与 CLI `--help` 一致）。**能力与 MCP 对等**（MCP 为薄壳）。**CLI** 长时间原子循环可用 **`hylyre session start`** + **`--session`**；**MCP** 进程内复用见 **`hylyre_open_session`**（说明见 **`docs/agent-loop.md`**）。
 
 ## 自然语言测试意图 → 可执行输入
 
 当用户要「不配运行态 VLM」时：
 
 - **回归计划 / 已知 selector**：**做法 A** — 编写或修改 **`*test-plan*.md`**（规约见 **`docs/agent-plan-a.md`**、`hylyre-plan-a.mdc`）。
-- **先感知界面再逐步执行**：**原子循环** — **`docs/agent-loop.md`**（含 **「自然语言未约定手势时」**：未写滑动时先 dump、再在 `Scroll` 内用 **`UP` 等** + **`area`/`at`** 并校验相邻 dump）。CLI 与 MCP 镜像。
+- **先感知界面再逐步执行**：**原子循环** — **`docs/agent-loop.md`**（含 **`_hylyre_hints`**、**`collect-list`**、**「自然语言未约定手势时」**：未写滑动时先 dump、再在 `Scroll` 内用 **`UP` 等** + **`area`/`at`** 并校验相邻 dump）。CLI 与 MCP 镜像。
 
 ## 常用参数意图
 

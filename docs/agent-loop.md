@@ -8,19 +8,20 @@
 
 ## 双轨制（强 CLI / 弱 MCP）
 
-每一项能力 **先** 有 CLI（`execute_*` + Typer），**再** 由 MCP 工具薄壳调用同一套 `execute_*`。例外：**`hylyre_open_session` / `hylyre_close_session`** 仅在 MCP 侧提供，用于 **复用 Hypium 连接**（性能/UX），**不增加** CLI 不具备的业务能力。
+每一项能力 **先** 有 CLI（`execute_*` + Typer），**再** 由 MCP 工具薄壳调用同一套 `execute_*`。**CLI session**：`hylyre session start` 启动后台进程并在 `127.0.0.1` 上暴露 JSON-RPC（令牌写入会话 JSON）；原子命令传 **`--session` / `-S`** 即可复用 Hypium 连接。**MCP**：`hylyre_open_session` / `hylyre_close_session` 在同一 MCP 进程内复用 `HylyreAgent`（与 CLI session 文件无交集）。
 
 ### CLI 典型循环
 
 1. **控件树**（非多模态 Agent）：  
-   `hylyre dump-ui --out tree.json`
+   `hylyre dump-ui --out tree.json`  
+   （长时间原子循环可加 **`--session`**，见下文「CLI Session daemon」。）
 2. **截图**（多模态 Agent）：  
-   `hylyre screenshot --out shot.jpeg`
+   `hylyre screenshot --out shot.jpeg`（可加 **`--session`**）
 3. **原子步骤**（单行 planned JSON）：  
    `hylyre run action --json "{\"action\":{\"type\":\"touch\",\"by_text\":\"登录\"}}"`  
-   或 `hylyre run tap` / `hylyre run input`（根键分别为 `touch` / `input`）、**`hylyre run swipe`** / **`hylyre run scroll`**（根键分别为 `swipe` / `scroll`，见下文）。
+   或 `hylyre run tap` / `hylyre run input`（根键分别为 `touch` / `input`）、**`hylyre run swipe`** / **`hylyre run scroll`**（根键分别为 `swipe` / `scroll`，见下文）。上述命令均支持 **`--session`**。
 4. **启动应用**（可选）：  
-   `hylyre run start-app --bundle com.example.app`
+   `hylyre run start-app --bundle com.example.app`（支持 **`--session`**；一次性会话需在 `session start` 时传入相同的 `--mock-port` / `--lyrebird-url`）
 5. **增量报告**（草稿 trace → 最终报告）：  
 
 ```bash
@@ -39,8 +40,41 @@ hylyre report verify --report report.md --trace trace.json
 
 - `hylyre_dump_ui` / `hylyre_screenshot`（可选 `session_id`）
 - `hylyre_run_action` / `hylyre_run_tap` / `hylyre_run_input` / **`hylyre_run_swipe`** / **`hylyre_run_scroll`** / `hylyre_start_app`
+- **`hylyre_collect_list`**：在半屏列表里滚到底并合并所有可见 **`Text`** 行（可选正则过滤）；等价 CLI：`hylyre collect-list`
 - `hylyre_report_begin` → `hylyre_report_record`（传入 `trace_state` JSON）→ `hylyre_report_finalize`
 - 可选：`hylyre_open_session` 后把同一 `session_id` 传给上述工具，减少重复连接。
+
+## CLI Session daemon（性能）
+
+每条独立的 `hylyre` CLI 进程默认 **connect → 操作 → disconnect**；Hypium/HDC 链路可能带来 **约 10–12s** 的固定开销。**会话模式**把连接保持在后台 daemon，原子命令只付操作耗时：
+
+1. `hylyre session start [--device-sn SN] [--mock-port P] [--session-file path]`  
+   成功后打印会话 JSON 路径（默认 `./.hylyre/session.json`）。
+2. 后续在同目录执行：`hylyre dump-ui -o t.json --session .hylyre/session.json`、`hylyre run swipe ... --session ...`、`hylyre collect-list --session ...`、`hylyre screenshot -o s.jpeg --session ...` 等。
+3. `hylyre session stop`（或向 daemon 发 `shutdown` RPC）结束并删除会话文件。
+4. `hylyre session status` 打印 `{alive, pid, ping_ok, …}` JSON。
+
+首次连接设备若长时间无响应，daemon 进程会在 **180s**（可用环境变量 **`HYLYRE_SESSION_CONNECT_TIMEOUT`** 覆盖，单位秒）后失败退出，避免离线设备无限挂起。
+
+与 **MCP `session_id`** 的关系：**互不共用文件**；编排若在 Cursor 里且已 `open_session`，用 MCP 工具即可；若在 shell / CI 里拼多条 CLI，优先 **`session start` + `--session`**。
+
+## dump-ui `_hylyre_hints`
+
+`dump-ui` / `hylyre_dump_ui` 在 JSON **根级**附带 **`_hylyre_hints`**（planner 可读，不参与 Hypium 原生 schema）：
+
+- **`scrollable_containers`**：`scrollable=true` 且类型为 `Scroll` / `List` / `Grid` / `WaterFlow` 的节点摘要（`bounds`、`origBounds`、`id`、`key`）。
+- 若 **`origBounds` 底部明显大于裁剪后的 `bounds`**，标记 **`likely_more_content_below`**（暗示列表可能未展示完全）。
+
+当任务涉及 **「列出全部 / 计数 / 核对清单」** 且 hints 提示有更多内容时：**优先 `hylyre collect-list`**（或按下列滚动手动 loop），不要仅凭首张 dump 下结论。
+
+## `collect-list`（列表完整性）
+
+对匹配到的滚动容器执行 **`swipe` UP（限定 `area`）→ `dump-ui` → 文本去重合并**，直到连续 **`--max-stable-rounds`** 轮无新增 **`Text`** 行或达到 **`--max-scrolls`**：
+
+- **CLI**：`hylyre collect-list [--session FILE] [--scroll-by-type Scroll] [--scroll-by-id …] [--item-pattern REGEX] [--out merged.json]`
+- **MCP**：`hylyre_collect_list`，参数 `session_path`（CLI 会话文件）或 `device_sn`（一次性连接）。
+
+默认收集 **`Text`** 叶节点字符串；**`--item-pattern`** 对 `id|key|text` 拼接串做正则过滤。
 
 ## 列表与滚屏（`swipe` / `scroll`）
 
@@ -98,11 +132,11 @@ hylyre run scroll --json "{\"scroll\":{\"direction\":\"down\",\"steps\":6}}"
 用户只说「点到某页后数有几条」「列出名称 / 信息」等，而 **未写要不要滑、往哪滑** 时，执行端 **不得** 在无依据的情况下默认连续滑动并直接下结论。推荐纪律如下：
 
 1. **先到目标页后做一次 `dump-ui`（或截图）**，建立当前可见事实；**禁止**在尚未读树的前提下默认「必须滑很多次」。
-2. **只有当你能从控件树（或截图）推断列表可能被截断、存在虚拟化、或业务上条目数与可见节点明显不符时**，才补充 **`swipe` / `scroll`**；推断依据示例：卡片/行 **`bounds` 贴屏幕底边**、同类 **`ListItem` 数量偏少**、文案暗示「还有更多」等。
+2. **只有当你能从控件树（或截图）推断列表可能被截断、存在虚拟化、或业务上条目数与可见节点明显不符时**，才补充 **`swipe` / `scroll`** / **`collect-list`**；推断依据示例：**`_hylyre_hints.likely_more_content_below`**、卡片/行 **`bounds` 贴屏幕底边**、同类 **`ListItem` 数量偏少**、文案暗示「还有更多」等。
 3. **竖向列表要露出视口下方尚未展示的条目**：在 Hypium 文档语义下，应在列表所在的 **`Scroll` 上使用 `direction: UP`**（控件内「上滑」）。**勿把口语「往下浏览」直接映射成参数 `DOWN`**，除非你已经核对 Hypium 在该页面上的实际矢量含义。
 4. **半屏模态 / Bottom Sheet**：列表滚动 **必须** 使用 **`swipe.area` / `scroll.at`**（常用 **`by_type: Scroll`**，多 `Scroll` 时改用 **`by_id`/`by_key`**）限定在浮层内列表；**禁止**依赖未限定 `area` 的全窗竖滑，以免关掉 Sheet。
 5. **滑动后必须校验**：对比 **相邻两次 `dump-ui`** 中与列表相关的节点或文案集合；**若无变化**，不得假设「列表仅有当前可见项」——应 **调整方向、`area`、`distance`**，或改用 **`scroll`**，直至树发生变化或合理判定已滚到底。
-6. **若希望消除歧义**：在 **`test-plan.md`** 的步骤 JSON 中 **显式写出** `swipe`/`scroll`（[做法 A](./agent-plan-a.md)），避免由 Agent 静默猜测手势。
+6. **若希望消除歧义**：在 **`test-plan.md`** 的步骤 JSON 中 **显式写出** `swipe`/`scroll`（[做法 A](./agent-plan-a.md)），避免由 Agent 静默猜测手势；或在上层编排（如 framework skill 6）对「全量枚举」步骤调用 **`collect-list`**。
 
 ## 选择器优先级
 
