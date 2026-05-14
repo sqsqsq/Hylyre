@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import importlib.metadata
 import os
 import shutil
 import subprocess
@@ -41,12 +42,12 @@ def _lyrebird_check() -> CheckResult:
             f"pip install 'hylyre[mock]' or pip install lyrebird — {_LYREBIRD_INSTALL_URL}",
         )
     try:
-        import lyrebird as lb  # type: ignore[import-untyped]
-
-        ver = getattr(lb, "__version__", None)
-        detail = f"import ok{f', {ver}' if ver else ''}"
+        ver = importlib.metadata.version("lyrebird")
+        detail = f"package found{f', {ver}' if ver else ''}"
+    except importlib.metadata.PackageNotFoundError:
+        detail = "package found on import path"
     except Exception as e:  # pragma: no cover
-        detail = f"package found but import failed: {e}"
+        detail = f"package found but metadata lookup failed: {e}"
         return CheckResult("lyrebird (pip)", False, detail)
     return CheckResult("lyrebird (pip)", True, detail)
 
@@ -77,6 +78,7 @@ def _cmd_version(exe: str, *version_args: str) -> tuple[bool, str]:
     try:
         out = subprocess.run(
             [path, *version_args],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             timeout=15,
