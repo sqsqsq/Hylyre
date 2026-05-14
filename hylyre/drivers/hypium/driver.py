@@ -28,7 +28,15 @@ _hypium_singleton: _HypiumShim | None = None
 
 
 def load_hypium_shim() -> _HypiumShim:
-    """Import Hypium lazily so `hylyre` installs without the device extra."""
+    """Import Hypium lazily so `hylyre` installs without the device extra.
+
+    NOTE for MCP stdio: this import has side effects (xdevice's
+    ``platform_logger`` attaches a ``StreamHandler(sys.stdout)`` at module load
+    time). Callers serving over stdio must invoke this function *before* the
+    transport rebinds ``sys.stdout``, ideally with ``sys.stdout`` temporarily
+    pointed at ``sys.stderr`` so captured handlers do not poison the JSON-RPC
+    channel. See :func:`hylyre.mcp.server.serve_stdio`.
+    """
     global _hypium_singleton
     if _hypium_singleton is None:
         try:
@@ -53,7 +61,14 @@ def reset_hypium_shim_for_tests() -> None:
 
 
 async def _to_thread(fn: Callable[..., _T], /, *args: Any, **kwargs: Any) -> _T:
-    return await asyncio.to_thread(fn, *args, **kwargs)
+    import functools
+
+    try:
+        import anyio.to_thread as _ayt
+
+        return await _ayt.run_sync(functools.partial(fn, *args, **kwargs))
+    except ImportError:
+        return await asyncio.to_thread(fn, *args, **kwargs)
 
 
 def _validate_swipe_distance_pct(distance: int) -> int:
@@ -141,11 +156,11 @@ class HypiumDriver(UiDriverBase):
         return self._raw
 
     async def connect(self) -> None:
-        shim = load_hypium_shim()
         if self._raw is not None:
             return
 
-        def _connect() -> Any:
+        def _load_and_connect() -> Any:
+            shim = load_hypium_shim()
             kwargs: dict[str, Any] = {
                 "log_level": self._log_level,
                 **self._extra_connect,
@@ -154,7 +169,7 @@ class HypiumDriver(UiDriverBase):
                 kwargs["device_sn"] = self._device_sn
             return shim.UiDriver.connect(connector="hdc", **kwargs)
 
-        self._raw = await _to_thread(_connect)
+        self._raw = await _to_thread(_load_and_connect)
 
     async def close(self) -> None:
         if self._raw is None:
