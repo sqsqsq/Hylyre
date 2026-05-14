@@ -14,6 +14,12 @@ from hylyre.wiring import create_hypium_agent
 _T = TypeVar("_T")
 
 
+def _session_ipc(session_file: Path, method: str, params: dict[str, Any]) -> Any:
+    from hylyre.session.client import session_ipc_call
+
+    return session_ipc_call(session_file, method, params)
+
+
 async def _with_hypium_driver(
     *,
     device_sn: str | None,
@@ -46,8 +52,19 @@ async def _with_hypium_agent(
         await agent.aclose()
 
 
-def execute_screenshot_bytes(*, device_sn: str | None = None) -> tuple[str, bytes]:
+def execute_screenshot_bytes(
+    *,
+    device_sn: str | None = None,
+    session_file: Path | None = None,
+) -> tuple[str, bytes]:
     """Return ``(mime, image_bytes)`` from Hypium capture."""
+    if session_file is not None:
+        import base64
+
+        r = _session_ipc(session_file, "screenshot_bytes", {})
+        mime = str(r["mime"])
+        raw = base64.standard_b64decode(str(r["base64"]))
+        return mime, raw
 
     async def _cap(driver: HypiumDriver) -> bytes:
         return await driver.screenshot()
@@ -61,9 +78,12 @@ def execute_screenshot_file(
     *,
     device_sn: str | None,
     out: Path,
+    session_file: Path | None = None,
 ) -> str:
     """Write screenshot bytes to ``out``; suffix hints jpeg vs png."""
-    mime, raw = execute_screenshot_bytes(device_sn=device_sn)
+    mime, raw = execute_screenshot_bytes(
+        device_sn=device_sn, session_file=session_file
+    )
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     suffix = ".jpeg" if mime == "image/jpeg" else ".png"
@@ -73,17 +93,33 @@ def execute_screenshot_file(
     return str(out.resolve())
 
 
-def execute_dump_ui_dict(*, device_sn: str | None = None) -> dict[str, Any]:
+def execute_dump_ui_dict(
+    *,
+    device_sn: str | None = None,
+    session_file: Path | None = None,
+) -> dict[str, Any]:
     """Return structured UI tree JSON."""
+    if session_file is not None:
+        return _session_ipc(session_file, "dump_ui", {})
+
+    from hylyre.ui_dump_hints import augment_ui_dump_payload
 
     async def _dump(driver: HypiumDriver) -> dict[str, Any]:
         return await driver.dump_ui()
 
-    return asyncio.run(_with_hypium_driver(device_sn=device_sn, fn=_dump))
+    raw = asyncio.run(_with_hypium_driver(device_sn=device_sn, fn=_dump))
+    if isinstance(raw, dict):
+        return augment_ui_dump_payload(raw)
+    return raw
 
 
-def execute_dump_ui_file(*, device_sn: str | None, out: Path) -> str:
-    payload = execute_dump_ui_dict(device_sn=device_sn)
+def execute_dump_ui_file(
+    *,
+    device_sn: str | None,
+    out: Path,
+    session_file: Path | None = None,
+) -> str:
+    payload = execute_dump_ui_dict(device_sn=device_sn, session_file=session_file)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -99,7 +135,21 @@ def execute_start_app(
     page_name: str | None = None,
     params: str = "",
     wait_time: float = 1.0,
+    session_file: Path | None = None,
 ) -> str:
+    if session_file is not None:
+        _session_ipc(
+            session_file,
+            "start_app",
+            {
+                "bundle": bundle,
+                "page_name": page_name,
+                "params": params,
+                "wait_time": wait_time,
+            },
+        )
+        return "ok"
+
     async def _go(agent: HylyreAgent) -> None:
         await agent.start_app(
             bundle, page_name=page_name, params=params, wait_time=wait_time
@@ -122,7 +172,12 @@ def execute_run_action(
     device_sn: str | None = None,
     mock_port: int | None = None,
     lyrebird_url: str | None = None,
+    session_file: Path | None = None,
 ) -> str:
+    if session_file is not None:
+        _session_ipc(session_file, "run_action", {"payload": payload})
+        return "ok"
+
     async def _go(agent: HylyreAgent) -> None:
         await agent.run_planned_action(payload)
 
@@ -143,7 +198,12 @@ def execute_run_tap(
     device_sn: str | None = None,
     mock_port: int | None = None,
     lyrebird_url: str | None = None,
+    session_file: Path | None = None,
 ) -> str:
+    if session_file is not None:
+        _session_ipc(session_file, "run_tap", {"payload": payload})
+        return "ok"
+
     async def _go(agent: HylyreAgent) -> None:
         await agent.run_planned_tap(payload)
 
@@ -164,7 +224,12 @@ def execute_run_input(
     device_sn: str | None = None,
     mock_port: int | None = None,
     lyrebird_url: str | None = None,
+    session_file: Path | None = None,
 ) -> str:
+    if session_file is not None:
+        _session_ipc(session_file, "run_input", {"payload": payload})
+        return "ok"
+
     async def _go(agent: HylyreAgent) -> None:
         await agent.run_planned_input(payload)
 
@@ -185,7 +250,12 @@ def execute_run_swipe(
     device_sn: str | None = None,
     mock_port: int | None = None,
     lyrebird_url: str | None = None,
+    session_file: Path | None = None,
 ) -> str:
+    if session_file is not None:
+        _session_ipc(session_file, "run_swipe", {"payload": payload})
+        return "ok"
+
     async def _go(agent: HylyreAgent) -> None:
         await agent.run_planned_swipe(payload)
 
@@ -270,7 +340,12 @@ def execute_run_scroll(
     device_sn: str | None = None,
     mock_port: int | None = None,
     lyrebird_url: str | None = None,
+    session_file: Path | None = None,
 ) -> str:
+    if session_file is not None:
+        _session_ipc(session_file, "run_scroll", {"payload": payload})
+        return "ok"
+
     async def _go(agent: HylyreAgent) -> None:
         await agent.run_planned_scroll(payload)
 
@@ -285,11 +360,18 @@ def execute_run_scroll(
     return "ok"
 
 
-def run_screenshot_out(*, device_sn: str | None, out: Path) -> None:
+def run_screenshot_out(
+    *,
+    device_sn: str | None,
+    out: Path,
+    session_file: Path | None = None,
+) -> None:
     import typer
 
     try:
-        path = execute_screenshot_file(device_sn=device_sn, out=out)
+        path = execute_screenshot_file(
+            device_sn=device_sn, out=out, session_file=session_file
+        )
     except ImportError as e:
         typer.secho(str(e), err=True)
         raise typer.Exit(code=2) from e
@@ -299,11 +381,18 @@ def run_screenshot_out(*, device_sn: str | None, out: Path) -> None:
     typer.echo(path)
 
 
-def run_dump_ui_out(*, device_sn: str | None, out: Path) -> None:
+def run_dump_ui_out(
+    *,
+    device_sn: str | None,
+    out: Path,
+    session_file: Path | None = None,
+) -> None:
     import typer
 
     try:
-        path = execute_dump_ui_file(device_sn=device_sn, out=out)
+        path = execute_dump_ui_file(
+            device_sn=device_sn, out=out, session_file=session_file
+        )
     except ImportError as e:
         typer.secho(str(e), err=True)
         raise typer.Exit(code=2) from e
@@ -322,6 +411,7 @@ def run_start_app_cli(
     page_name: str | None,
     params: str,
     wait_time: float,
+    session_file: Path | None = None,
 ) -> None:
     import typer
 
@@ -334,6 +424,7 @@ def run_start_app_cli(
             page_name=page_name,
             params=params,
             wait_time=wait_time,
+            session_file=session_file,
         )
     except ImportError as e:
         typer.secho(str(e), err=True)
@@ -350,6 +441,7 @@ def run_action_json(
     device_sn: str | None,
     mock_port: int | None,
     lyrebird_url: str | None,
+    session_file: Path | None = None,
 ) -> None:
     import typer
 
@@ -362,6 +454,7 @@ def run_action_json(
             device_sn=device_sn,
             mock_port=mock_port,
             lyrebird_url=lyrebird_url,
+            session_file=session_file,
         )
     except json.JSONDecodeError as e:
         typer.secho(f"Invalid JSON: {e}", err=True)
@@ -381,6 +474,7 @@ def run_tap_json(
     device_sn: str | None,
     mock_port: int | None,
     lyrebird_url: str | None,
+    session_file: Path | None = None,
 ) -> None:
     import typer
 
@@ -393,6 +487,7 @@ def run_tap_json(
             device_sn=device_sn,
             mock_port=mock_port,
             lyrebird_url=lyrebird_url,
+            session_file=session_file,
         )
     except json.JSONDecodeError as e:
         typer.secho(f"Invalid JSON: {e}", err=True)
@@ -412,6 +507,7 @@ def run_swipe_json(
     device_sn: str | None,
     mock_port: int | None,
     lyrebird_url: str | None,
+    session_file: Path | None = None,
     area_by_type: str | None = None,
     area_by_text: str | None = None,
     area_by_id: str | None = None,
@@ -435,6 +531,7 @@ def run_swipe_json(
             device_sn=device_sn,
             mock_port=mock_port,
             lyrebird_url=lyrebird_url,
+            session_file=session_file,
         )
     except json.JSONDecodeError as e:
         typer.secho(f"Invalid JSON: {e}", err=True)
@@ -454,6 +551,7 @@ def run_scroll_json(
     device_sn: str | None,
     mock_port: int | None,
     lyrebird_url: str | None,
+    session_file: Path | None = None,
     at_by_type: str | None = None,
     at_by_text: str | None = None,
     at_by_id: str | None = None,
@@ -477,6 +575,7 @@ def run_scroll_json(
             device_sn=device_sn,
             mock_port=mock_port,
             lyrebird_url=lyrebird_url,
+            session_file=session_file,
         )
     except json.JSONDecodeError as e:
         typer.secho(f"Invalid JSON: {e}", err=True)
@@ -496,6 +595,7 @@ def run_input_json(
     device_sn: str | None,
     mock_port: int | None,
     lyrebird_url: str | None,
+    session_file: Path | None = None,
 ) -> None:
     import typer
 
@@ -508,6 +608,7 @@ def run_input_json(
             device_sn=device_sn,
             mock_port=mock_port,
             lyrebird_url=lyrebird_url,
+            session_file=session_file,
         )
     except json.JSONDecodeError as e:
         typer.secho(f"Invalid JSON: {e}", err=True)
