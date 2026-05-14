@@ -10,12 +10,14 @@ import typer
 from hylyre.cli.commands import (
     ai_cmd,
     bootstrap_cmd,
+    collect_cmd,
     device as device_cmd,
     doctor as doctor_cmd,
     loop_cmd,
     mock_cmd,
     progress_cmd,
     run_cmd,
+    session_cmd,
     spec_cmd,
 )
 
@@ -47,6 +49,11 @@ app.add_typer(progress_app, name="progress")
 
 spec_app = typer.Typer(help="OpenSpec workspace helpers")
 app.add_typer(spec_app, name="spec")
+
+session_app = typer.Typer(
+    help="Persistent Hypium TCP session — reuse connection across atomic CLI calls.",
+)
+app.add_typer(session_app, name="session")
 
 
 @progress_app.callback(invoke_without_command=True)
@@ -103,6 +110,62 @@ def spec_default(ctx: typer.Context) -> None:
 def spec_list() -> None:
     """Run openspec list when installed, else print specs/ + changes/ summary."""
     spec_cmd.run_spec_list()
+
+
+@session_app.command("daemon", hidden=True)
+def session_daemon_hidden() -> None:
+    """Internal: spawned by ``session start``."""
+    session_cmd.run_daemon_cli()
+
+
+@session_app.command("start")
+def session_start(
+    session_file: Optional[Path] = typer.Option(
+        None,
+        "--session-file",
+        help="Where to write session JSON (default ./.hylyre/session.json).",
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    mock_port: Optional[int] = typer.Option(None, "--mock-port"),
+    lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    wait_s: float = typer.Option(
+        120.0,
+        "--wait-s",
+        help="Max seconds to wait for daemon socket + ping.",
+    ),
+) -> None:
+    """Start background Hypium session daemon; prints session JSON path."""
+    session_cmd.run_session_start(
+        session_file=session_file,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+        wait_s=wait_s,
+    )
+
+
+@session_app.command("stop")
+def session_stop(
+    session_file: Optional[Path] = typer.Option(
+        None,
+        "--session-file",
+        help="Session JSON path (default ./.hylyre/session.json).",
+    ),
+) -> None:
+    """Stop daemon and remove session file."""
+    session_cmd.run_session_stop(session_file=session_file)
+
+
+@session_app.command("status")
+def session_status(
+    session_file: Optional[Path] = typer.Option(
+        None,
+        "--session-file",
+        help="Session JSON path (default ./.hylyre/session.json).",
+    ),
+) -> None:
+    """Print JSON status (pid, ping_ok)."""
+    session_cmd.run_session_status(session_file=session_file)
 
 
 @run_app.callback(invoke_without_command=True)
@@ -218,6 +281,12 @@ def run_action_step(
     device_sn: Optional[str] = typer.Option(None, "--device-sn"),
     mock_port: Optional[int] = typer.Option(None, "--mock-port"),
     lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
 ) -> None:
     """One Hylyre planned-action JSON step (no VLM)."""
     loop_cmd.run_action_json(
@@ -225,6 +294,7 @@ def run_action_step(
         device_sn=device_sn,
         mock_port=mock_port,
         lyrebird_url=lyrebird_url,
+        session_file=session,
     )
 
 
@@ -239,6 +309,12 @@ def run_tap_step(
     device_sn: Optional[str] = typer.Option(None, "--device-sn"),
     mock_port: Optional[int] = typer.Option(None, "--mock-port"),
     lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
 ) -> None:
     """One Hylyre planned tap JSON (no VLM)."""
     loop_cmd.run_tap_json(
@@ -246,6 +322,7 @@ def run_tap_step(
         device_sn=device_sn,
         mock_port=mock_port,
         lyrebird_url=lyrebird_url,
+        session_file=session,
     )
 
 
@@ -260,6 +337,12 @@ def run_input_step(
     device_sn: Optional[str] = typer.Option(None, "--device-sn"),
     mock_port: Optional[int] = typer.Option(None, "--mock-port"),
     lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
 ) -> None:
     """One Hylyre planned input JSON (no VLM)."""
     loop_cmd.run_input_json(
@@ -267,6 +350,7 @@ def run_input_step(
         device_sn=device_sn,
         mock_port=mock_port,
         lyrebird_url=lyrebird_url,
+        session_file=session,
     )
 
 
@@ -285,6 +369,12 @@ def run_swipe_step(
     device_sn: Optional[str] = typer.Option(None, "--device-sn"),
     mock_port: Optional[int] = typer.Option(None, "--mock-port"),
     lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
     area_by_type: Optional[str] = typer.Option(
         None,
         "--area-by-type",
@@ -312,6 +402,7 @@ def run_swipe_step(
         device_sn=device_sn,
         mock_port=mock_port,
         lyrebird_url=lyrebird_url,
+        session_file=session,
         area_by_type=area_by_type,
         area_by_text=area_by_text,
         area_by_id=area_by_id,
@@ -334,6 +425,12 @@ def run_scroll_step(
     device_sn: Optional[str] = typer.Option(None, "--device-sn"),
     mock_port: Optional[int] = typer.Option(None, "--mock-port"),
     lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
     at_by_type: Optional[str] = typer.Option(
         None,
         "--at-by-type",
@@ -361,6 +458,7 @@ def run_scroll_step(
         device_sn=device_sn,
         mock_port=mock_port,
         lyrebird_url=lyrebird_url,
+        session_file=session,
         at_by_type=at_by_type,
         at_by_text=at_by_text,
         at_by_id=at_by_id,
@@ -374,6 +472,12 @@ def run_start_app_step(
     device_sn: Optional[str] = typer.Option(None, "--device-sn"),
     mock_port: Optional[int] = typer.Option(None, "--mock-port"),
     lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
     page_name: Optional[str] = typer.Option(None, "--page-name"),
     params: str = typer.Option("", "--params"),
     wait_time: float = typer.Option(1.0, "--wait-time"),
@@ -387,6 +491,7 @@ def run_start_app_step(
         page_name=page_name,
         params=params,
         wait_time=wait_time,
+        session_file=session,
     )
 
 
@@ -399,9 +504,15 @@ def screenshot_cmd(
         help="Output image path (.jpeg or .png).",
     ),
     device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
 ) -> None:
     """Capture device screenshot via Hypium (no VLM)."""
-    loop_cmd.run_screenshot_out(device_sn=device_sn, out=out)
+    loop_cmd.run_screenshot_out(device_sn=device_sn, out=out, session_file=session)
 
 
 @app.command("dump-ui")
@@ -413,9 +524,94 @@ def dump_ui_cmd(
         help="Output JSON path (Hypium UiTree / uitest dumpLayout).",
     ),
     device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
 ) -> None:
     """Dump UI hierarchy JSON for external agents (no VLM)."""
-    loop_cmd.run_dump_ui_out(device_sn=device_sn, out=out)
+    loop_cmd.run_dump_ui_out(device_sn=device_sn, out=out, session_file=session)
+
+
+@app.command("collect-list")
+def collect_list_cmd(
+    out: Optional[Path] = typer.Option(
+        None,
+        "--out",
+        "-o",
+        help="Optional JSON output path (default: stdout).",
+    ),
+    device_sn: Optional[str] = typer.Option(None, "--device-sn"),
+    mock_port: Optional[int] = typer.Option(None, "--mock-port"),
+    lyrebird_url: Optional[str] = typer.Option(None, "--lyrebird-url"),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
+    scroll_by_type: Optional[str] = typer.Option(
+        None,
+        "--scroll-by-type",
+        help="Scroll/list container type match (default Scroll when omitted).",
+    ),
+    scroll_by_text: Optional[str] = typer.Option(
+        None,
+        "--scroll-by-text",
+        help="Locate scroll container by substring of node text.",
+    ),
+    scroll_by_id: Optional[str] = typer.Option(
+        None,
+        "--scroll-by-id",
+        help="Locate scroll container by id.",
+    ),
+    scroll_by_key: Optional[str] = typer.Option(
+        None,
+        "--scroll-by-key",
+        help="Locate scroll container by key.",
+    ),
+    item_pattern: Optional[str] = typer.Option(
+        None,
+        "--item-pattern",
+        help="Regex filter on id|key|text of Text rows.",
+    ),
+    max_scrolls: int = typer.Option(
+        10,
+        "--max-scrolls",
+        min=1,
+        help="Upper bound on swipe iterations.",
+    ),
+    swipe_distance: int = typer.Option(
+        60,
+        "--swipe-distance",
+        min=1,
+        help="Hypium swipe distance (UP) inside scroll area.",
+    ),
+    max_stable_rounds: int = typer.Option(
+        2,
+        "--max-stable-rounds",
+        min=1,
+        help="Stop after N consecutive dumps with no new Text rows.",
+    ),
+) -> None:
+    """Swipe UP inside a scroll container and merge Text rows until stable."""
+    collect_cmd.run_collect_list_cli(
+        out=out,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+        session_file=session,
+        scroll_by_type=scroll_by_type,
+        scroll_by_text=scroll_by_text,
+        scroll_by_id=scroll_by_id,
+        scroll_by_key=scroll_by_key,
+        item_pattern=item_pattern,
+        max_scrolls=max_scrolls,
+        swipe_distance=swipe_distance,
+        max_stable_rounds=max_stable_rounds,
+    )
 
 
 @device_app.command("list")
