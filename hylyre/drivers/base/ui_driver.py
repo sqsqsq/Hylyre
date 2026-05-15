@@ -93,6 +93,7 @@ class UiDriverBase(ABC):
         area_by_id: str | None = None,
         area_by_type: str | None = None,
         area_by_key: str | None = None,
+        area_scrollable: bool | None = None,
         side: str | None = None,
         start_point: tuple[float | int, float | int] | None = None,
         swipe_time: float = 0.3,
@@ -115,6 +116,7 @@ class UiDriverBase(ABC):
         at_by_id: str | None = None,
         at_by_type: str | None = None,
         at_by_key: str | None = None,
+        at_scrollable: bool | None = None,
         key1: int | None = None,
         key2: int | None = None,
     ) -> None:

@@ -5,11 +5,28 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any
 
 from hylyre.api.agent import HylyreAgent
+from hylyre.diagnostic_log import diagnostic_log
 from hylyre.cli.commands.loop_cmd import _with_hypium_agent
+
+
+def _build_swipe_payload(
+    direction: str,
+    distance: int,
+    scroll_area: dict[str, str],
+    scroll_root: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build swipe payload; adds ``scrollable: true`` when a scrollable root was found."""
+    area: dict[str, Any] = dict(scroll_area)
+    if scroll_root is not None:
+        attrs = scroll_root.get("attributes") or {}
+        if str(attrs.get("scrollable", "")).lower() == "true":
+            area["scrollable"] = True
+    return {"swipe": {"direction": direction, "distance": distance, "area": area}}
 
 
 def _selector_matches(attrs: dict[str, Any], scroll_area: dict[str, str]) -> bool:
@@ -91,6 +108,7 @@ def normalize_collect_params(params: dict[str, Any]) -> dict[str, Any]:
         "max_stable_rounds": int(params.get("max_stable_rounds") or 2),
         "reset_to_top": bool(params.get("reset_to_top")),
         "bidirectional": bool(params.get("bidirectional")),
+        "early_bounce_break": bool(params.get("early_bounce_break", True)),
     }
     return out
 
@@ -118,19 +136,41 @@ async def _swipe_until_viewport_stable(
     stable_need: int,
     max_swipes: int,
     pattern_re: re.Pattern[str] | None,
+    early_bounce_break: bool,
+    phase: str,
 ) -> int:
     """Swipe inside scroll_area until visible Text fingerprint stops changing."""
     stable = 0
     prev_fp: frozenset[tuple[str, str, str]] | None = None
     iterations_done = 0
+    fp_checkpoint: frozenset[tuple[str, str, str]] | None = None
     for i in range(max_swipes):
         iterations_done = i + 1
+        t_dump = time.perf_counter()
         tree_payload = await agent.dump_ui()
+        dump_ms = (time.perf_counter() - t_dump) * 1000.0
         tree = tree_payload.get("tree") if isinstance(tree_payload, dict) else None
         if not isinstance(tree, dict):
             break
         fp = _visible_rows_fingerprint(tree, scroll_area, pattern_re)
         scroll_root = find_scroll_root(tree, scroll_area)
+
+        if (
+            early_bounce_break
+            and fp_checkpoint is not None
+            and fp == fp_checkpoint
+        ):
+            diagnostic_log(
+                f"collect_list phase={phase} iter={iterations_done} "
+                f"dir={direction} early_bounce=1 dump_ms={dump_ms:.1f}"
+            )
+            break
+
+        diagnostic_log(
+            f"collect_list phase={phase} iter={iterations_done} dir={direction} "
+            f"dump_ms={dump_ms:.1f}"
+        )
+
         if prev_fp is not None and fp == prev_fp:
             stable += 1
             if stable >= stable_need:
@@ -140,14 +180,17 @@ async def _swipe_until_viewport_stable(
         prev_fp = fp
         if scroll_root is None:
             break
-        payload = {
-            "swipe": {
-                "direction": direction,
-                "distance": swipe_distance,
-                "area": dict(scroll_area),
-            }
-        }
+        fp_checkpoint = fp
+        payload = _build_swipe_payload(
+            direction, swipe_distance, scroll_area, scroll_root,
+        )
+        t_swipe = time.perf_counter()
         await agent.run_planned_swipe(payload)
+        swipe_ms = (time.perf_counter() - t_swipe) * 1000.0
+        diagnostic_log(
+            f"collect_list phase={phase} iter={iterations_done} dir={direction} "
+            f"swipe_ms={swipe_ms:.1f}"
+        )
     return iterations_done
 
 
@@ -162,12 +205,17 @@ async def _collect_merge_direction(
     max_scrolls: int,
     items: list[dict[str, Any]],
     seen: set[tuple[str, str, str]],
+    early_bounce_break: bool,
+    phase: str,
 ) -> int:
     stable = 0
     iterations_done = 0
+    fp_checkpoint: frozenset[tuple[str, str, str]] | None = None
     for i in range(max_scrolls):
         iterations_done = i + 1
+        t_dump = time.perf_counter()
         tree_payload = await agent.dump_ui()
+        dump_ms = (time.perf_counter() - t_dump) * 1000.0
         tree = tree_payload.get("tree") if isinstance(tree_payload, dict) else None
         if not isinstance(tree, dict):
             break
@@ -179,11 +227,29 @@ async def _collect_merge_direction(
         else:
             gather_text_items(tree, pattern_re, acc)
 
+        fp = _visible_rows_fingerprint(tree, scroll_area, pattern_re)
+
+        if (
+            early_bounce_break
+            and fp_checkpoint is not None
+            and fp == fp_checkpoint
+        ):
+            diagnostic_log(
+                f"collect_list phase={phase} iter={iterations_done} "
+                f"dir={direction} early_bounce=1 dump_ms={dump_ms:.1f}"
+            )
+            break
+
+        diagnostic_log(
+            f"collect_list phase={phase} iter={iterations_done} dir={direction} "
+            f"dump_ms={dump_ms:.1f}"
+        )
+
         added = 0
         for row in acc:
-            fp = (row["id"], row["key"], row["text"])
-            if fp not in seen:
-                seen.add(fp)
+            rfp = (row["id"], row["key"], row["text"])
+            if rfp not in seen:
+                seen.add(rfp)
                 items.append(row)
                 added += 1
 
@@ -197,14 +263,17 @@ async def _collect_merge_direction(
         if scroll_root is None:
             break
 
-        payload = {
-            "swipe": {
-                "direction": direction,
-                "distance": swipe_distance,
-                "area": dict(scroll_area),
-            }
-        }
+        fp_checkpoint = fp
+        payload = _build_swipe_payload(
+            direction, swipe_distance, scroll_area, scroll_root,
+        )
+        t_swipe = time.perf_counter()
         await agent.run_planned_swipe(payload)
+        swipe_ms = (time.perf_counter() - t_swipe) * 1000.0
+        diagnostic_log(
+            f"collect_list phase={phase} iter={iterations_done} dir={direction} "
+            f"swipe_ms={swipe_ms:.1f}"
+        )
 
     return iterations_done
 
@@ -222,6 +291,7 @@ async def collect_list_on_agent(
         stable_need = max(1, int(params.get("max_stable_rounds") or 2))
         reset_to_top = bool(params.get("reset_to_top"))
         bidirectional = bool(params.get("bidirectional"))
+        early_bounce_break = bool(params.get("early_bounce_break", True))
     else:
         p = normalize_collect_params(params)
         scroll_area = p["scroll_area"]
@@ -233,6 +303,7 @@ async def collect_list_on_agent(
         stable_need = max(1, p["max_stable_rounds"])
         reset_to_top = p["reset_to_top"]
         bidirectional = p["bidirectional"]
+        early_bounce_break = p["early_bounce_break"]
 
     items: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
@@ -246,6 +317,8 @@ async def collect_list_on_agent(
             stable_need=stable_need,
             max_swipes=max_scrolls,
             pattern_re=pattern_re,
+            early_bounce_break=early_bounce_break,
+            phase="reset_to_top",
         )
 
     iterations_up = await _collect_merge_direction(
@@ -258,6 +331,8 @@ async def collect_list_on_agent(
         max_scrolls=max_scrolls,
         items=items,
         seen=seen,
+        early_bounce_break=early_bounce_break,
+        phase="merge_up",
     )
 
     iterations_down = 0
@@ -272,6 +347,8 @@ async def collect_list_on_agent(
             max_scrolls=max_scrolls,
             items=items,
             seen=seen,
+            early_bounce_break=early_bounce_break,
+            phase="merge_down",
         )
 
     return {
@@ -284,6 +361,7 @@ async def collect_list_on_agent(
         "scroll_area": scroll_area,
         "reset_to_top": reset_to_top,
         "bidirectional": bidirectional,
+        "early_bounce_break": early_bounce_break,
     }
 
 
@@ -332,6 +410,7 @@ def run_collect_list_cli(
     max_stable_rounds: int,
     reset_to_top: bool,
     bidirectional: bool,
+    early_bounce_break: bool,
 ) -> None:
     import typer
 
@@ -346,6 +425,7 @@ def run_collect_list_cli(
         "max_stable_rounds": max_stable_rounds,
         "reset_to_top": reset_to_top,
         "bidirectional": bidirectional,
+        "early_bounce_break": early_bounce_break,
     }
     opts = [
         scroll_by_type,

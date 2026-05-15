@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 from typing import Any
 
 from hylyre.cli.commands.loop_cmd import execute_dump_ui_dict
+from hylyre.diagnostic_log import diagnostic_log
 from hylyre.ui_dump_filter import DumpFilterSpec
 
 
@@ -67,7 +69,11 @@ def find_in_payload(
         for ch in n.get("children") or []:
             walk(ch, depth + 1)
 
+    _t_walk = time.perf_counter()
     walk(tree)
+    diagnostic_log(
+        f"find_in_payload walk_ms={(time.perf_counter() - _t_walk) * 1000:.1f}"
+    )
     truncated = len(hits) >= limit
     return {
         "hits": hits[:limit],

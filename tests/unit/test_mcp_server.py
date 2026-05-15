@@ -65,6 +65,22 @@ async def test_mcp_tool_inventory() -> None:
 
 
 @pytest.mark.asyncio
+async def test_mcp_doctor_emits_tool_timing_log(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[str] = []
+
+    def fake_log(msg: str) -> None:
+        captured.append(msg)
+
+    monkeypatch.setattr("hylyre.mcp.server._mcp_log", fake_log)
+    mcp = build_mcp()
+    async with Client(mcp) as client:
+        await client.call_tool("hylyre_doctor", {})
+    joined = "\n".join(captured)
+    assert "tool_start name=hylyre_doctor" in joined
+    assert "tool_end name=hylyre_doctor" in joined
+
+
+@pytest.mark.asyncio
 async def test_mcp_doctor_tool_returns_text() -> None:
     mcp = build_mcp()
     async with Client(mcp) as client:

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import copy
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
+
+from hylyre.diagnostic_log import diagnostic_log
 
 
 DEFAULT_MINIMAL_ATTRS: frozenset[str] = frozenset(
@@ -240,17 +243,35 @@ def tree_to_summary_list(
 
 def apply_ui_dump_filter(payload: dict[str, Any], spec: DumpFilterSpec) -> dict[str, Any]:
     """Return a filtered copy of ``payload`` (``tree`` + preserved root keys like hints)."""
+    tree = payload.get("tree")
+    if (
+        isinstance(tree, dict)
+        and spec.full
+        and not spec.summary
+        and spec.max_depth is None
+        and not spec.active_regex_filters()
+        and not spec.keep_clickable
+        and not spec.keep_scrollable
+        and not spec.keep_attrs
+        and not spec.prune_attrs
+    ):
+        return payload
+
+    t_all = time.perf_counter()
     out = dict(payload)
     tree = out.get("tree")
     if not isinstance(tree, dict):
         return out
 
+    t_dc = time.perf_counter()
     tree = copy.deepcopy(tree)
+    deepcopy_ms = (time.perf_counter() - t_dc) * 1000.0
     depth_cap = spec.max_depth
 
     needs_mark_prune = (
         spec.active_regex_filters() or spec.keep_clickable or spec.keep_scrollable
     )
+    t_struct = time.perf_counter()
     if needs_mark_prune:
         text_re = _compile(spec.filter_text)
         id_re = _compile(spec.filter_id)
@@ -272,19 +293,31 @@ def apply_ui_dump_filter(payload: dict[str, Any], spec: DumpFilterSpec) -> dict[
     elif depth_cap is not None:
         clipped = _clip_tree_depth(tree, 0, depth_cap)
         tree = clipped if clipped is not None else {"attributes": {}, "children": []}
+    struct_ms = (time.perf_counter() - t_struct) * 1000.0
 
     out["tree"] = tree
 
+    t_attr = time.perf_counter()
     allowed = _build_allowed_attrs(spec)
     if not spec.full and isinstance(tree, dict):
         _apply_attr_policy(tree, allowed_attrs=allowed, depth=0, depth_cap=None)
+    attr_ms = (time.perf_counter() - t_attr) * 1000.0
 
+    summary_ms = 0.0
     if spec.summary:
+        t_sum = time.perf_counter()
         items = tree_to_summary_list(out["tree"], max_depth=depth_cap)
         del out["tree"]
         out["summary"] = items
         out["_hylyre_summary_count"] = len(items)
+        summary_ms = (time.perf_counter() - t_sum) * 1000.0
 
+    total_ms = (time.perf_counter() - t_all) * 1000.0
+    diagnostic_log(
+        "apply_ui_dump_filter "
+        f"total_ms={total_ms:.1f} deepcopy_ms={deepcopy_ms:.1f} "
+        f"struct_ms={struct_ms:.1f} attr_ms={attr_ms:.1f} summary_ms={summary_ms:.1f}"
+    )
     return out
 
 

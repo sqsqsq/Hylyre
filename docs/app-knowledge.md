@@ -29,6 +29,8 @@ API：`hylyre.app_store.paths.resolve_read_dirs` / `resolve_write_dir`。
 | Framework 子进程 | 显式 **`--store-dir ./cache/apps`**（或 MCP `store_dir` 参数） |
 | CI | 设置 **`HYLYRE_APP_STORE_DIR`** 指向流水线缓存目录 |
 
+若 Cursor MCP 进程的 **`cwd` 不是 Hylyre 仓库根**，**写入**可能落在用户目录下的 **`~/.hylyre/apps`**，与在仓库内终端跑出的 **`./.hylyre/apps`** 不是同一套快照。请把 MCP 配置里的 **`cwd` 设为仓库绝对路径**（见 **`docs/cursor-mcp-setup.md`**），或显式设置 **`HYLYRE_APP_STORE_DIR`** / 工具参数 **`store_dir`**。
+
 ## CLI 速查
 
 - **裁剪 dump**：`hylyre dump-ui ...`（`--filter-text` / `--full` / `--summary` 等，见 `hylyre dump-ui --help`）

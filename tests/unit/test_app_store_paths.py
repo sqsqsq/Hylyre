@@ -52,3 +52,17 @@ def test_resolve_write_dir_prefers_cli_over_env_cwd(
     monkeypatch.delenv("HYLYRE_APP_STORE_DIR", raising=False)
     assert resolve_write_dir(None) == (tmp_path / ".hylyre" / "apps").resolve()
 
+
+def test_resolve_write_dir_succeeds_when_cwd_under_fake_home(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: user-home-shaped cwd still gets a writable project-local store."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    workspace = fake_home / "workspace"
+    workspace.mkdir()
+    monkeypatch.chdir(workspace)
+    monkeypatch.delenv("HYLYRE_APP_STORE_DIR", raising=False)
+    assert resolve_write_dir(None) == (workspace / ".hylyre" / "apps").resolve()
+

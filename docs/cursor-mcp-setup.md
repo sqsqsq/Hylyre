@@ -37,6 +37,10 @@ Windows 示例：
 
 保存后**重载窗口**或重启 Cursor，在 Agent 可用工具列表中应出现以 `hylyre_` 为前缀的工具。
 
+## App 知识目录与 MCP `cwd`
+
+快照与索引的默认**写路径**含 **`<cwd>/.hylyre/apps`**。MCP 子进程的 **`cwd` 即此项中的 cwd**：若配置成用户主目录等非仓库路径，写入会落到 **`~/.hylyre/apps`** 等位置，与你在克隆根目录用 CLI 产生的 **`./.hylyre/apps`** 不一致，表现为「明明保存了却 **`hylyre_app_find` 命中不了**」。请始终将 **`cwd` 设为 Hylyre 仓库根**，或统一设置环境变量 **`HYLYRE_APP_STORE_DIR`**。
+
 ## 环境变量（按需）
 
 与终端运行 Hylyre 相同：真机 NL/VLM 步骤需 **`HYLYRE_VLM_*`**；Lyrebrid 可设 **`HYLYRE_LYREBIRD_URL`**。MCP 子进程会继承 Cursor 启动环境（可在 shell profile 或系统环境变量中设置）。

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from types import ModuleType
 from typing import Any, Callable, TypeVar
 
+from hylyre.diagnostic_log import diagnostic_log
 from hylyre.drivers.base.ui_driver import UiDriverBase
 
 _T = TypeVar("_T")
@@ -108,12 +110,13 @@ def _normalize_hypium_swipe_side(side: str | None) -> Any:
     return mapping[key]
 
 
-def _hypium_single_selector(shim: _HypiumShim, **kw: str | None) -> Any:
-    """At most one of by_text / by_id / by_type / by_key."""
+def _hypium_single_selector(shim: _HypiumShim, **kw: Any) -> Any:
+    """At most one of by_text / by_id / by_type / by_key, optionally chained with scrollable."""
     by_text = kw.get("by_text")
     by_id = kw.get("by_id")
     by_type = kw.get("by_type")
     by_key = kw.get("by_key")
+    scrollable = kw.get("scrollable")
     opts = [
         ("by_text", by_text),
         ("by_id", by_id),
@@ -129,12 +132,16 @@ def _hypium_single_selector(shim: _HypiumShim, **kw: str | None) -> Any:
         return None
     name, val = present[0]
     if name == "by_text":
-        return shim.BY.text(val)
-    if name == "by_id":
-        return shim.BY.id(val)
-    if name == "by_type":
-        return shim.BY.type(val)
-    return shim.BY.key(val)
+        sel = shim.BY.text(val)
+    elif name == "by_id":
+        sel = shim.BY.id(val)
+    elif name == "by_type":
+        sel = shim.BY.type(val)
+    else:
+        sel = shim.BY.key(val)
+    if scrollable is True:
+        sel = sel.scrollable(True)
+    return sel
 
 
 class HypiumDriver(UiDriverBase):
@@ -271,7 +278,12 @@ class HypiumDriver(UiDriverBase):
 
         def _sync_dump() -> dict[str, Any]:
             uitree = raw.UiTree
+            t0 = time.perf_counter()
             uitree.refresh()
+            diagnostic_log(
+                f"hypium_dump_ui uitree.refresh_ms="
+                f"{(time.perf_counter() - t0) * 1000:.1f}"
+            )
             tree = uitree.tree
             if tree is None:
                 raise RuntimeError("Hypium UiTree.refresh() produced no tree")
@@ -292,6 +304,7 @@ class HypiumDriver(UiDriverBase):
         area_by_id: str | None = None,
         area_by_type: str | None = None,
         area_by_key: str | None = None,
+        area_scrollable: bool | None = None,
         side: str | None = None,
         start_point: tuple[float | int, float | int] | None = None,
         swipe_time: float = 0.3,
@@ -308,6 +321,7 @@ class HypiumDriver(UiDriverBase):
             by_id=area_by_id,
             by_type=area_by_type,
             by_key=area_by_key,
+            scrollable=area_scrollable,
         )
         side_arg = _normalize_hypium_swipe_side(side)
         sp: tuple[float, float] | None = None
@@ -332,6 +346,7 @@ class HypiumDriver(UiDriverBase):
         at_by_id: str | None = None,
         at_by_type: str | None = None,
         at_by_key: str | None = None,
+        at_scrollable: bool | None = None,
         key1: int | None = None,
         key2: int | None = None,
     ) -> None:
@@ -360,6 +375,7 @@ class HypiumDriver(UiDriverBase):
             by_id=at_by_id,
             by_type=at_by_type,
             by_key=at_by_key,
+            scrollable=at_scrollable,
         )
         if selector is not None:
             if x is not None or y is not None:

@@ -112,3 +112,11 @@ def test_summary_replaces_tree() -> None:
     assert "tree" not in out
     assert "summary" in out
     assert any(row["text"] == "Alpha" for row in out["summary"])
+
+
+def test_full_no_filter_short_circuits_same_tree_reference() -> None:
+    p = _sample_tree()
+    tree_ref = p["tree"]
+    out = apply_ui_dump_filter(p, DumpFilterSpec(full=True))
+    assert out is p
+    assert out["tree"] is tree_ref

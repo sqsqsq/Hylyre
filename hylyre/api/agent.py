@@ -215,12 +215,13 @@ class HylyreAgent:
         )
 
     @staticmethod
-    def _swipe_area_kwargs(area: dict[str, Any] | None) -> dict[str, str | None]:
-        blank = {
+    def _swipe_area_kwargs(area: dict[str, Any] | None) -> dict[str, Any]:
+        blank: dict[str, Any] = {
             "area_by_text": None,
             "area_by_id": None,
             "area_by_type": None,
             "area_by_key": None,
+            "area_scrollable": None,
         }
         if area is None:
             return blank
@@ -239,6 +240,8 @@ class HylyreAgent:
         if len(found) == 1:
             k = found[0]
             out[f"area_{k}"] = str(area[k])
+        if area.get("scrollable") is True:
+            out["area_scrollable"] = True
         return out
 
     async def _apply_swipe_block(self, block: dict[str, Any]) -> None:
@@ -300,12 +303,13 @@ class HylyreAgent:
         return None, None
 
     @staticmethod
-    def _scroll_selector_kwargs(at: dict[str, Any] | None) -> dict[str, str | None]:
-        blank = {
+    def _scroll_selector_kwargs(at: dict[str, Any] | None) -> dict[str, Any]:
+        blank: dict[str, Any] = {
             "at_by_text": None,
             "at_by_id": None,
             "at_by_type": None,
             "at_by_key": None,
+            "at_scrollable": None,
         }
         if at is None:
             return blank
@@ -326,6 +330,8 @@ class HylyreAgent:
         if len(found) == 1:
             k = found[0]
             out[f"at_{k}"] = str(at[k])
+        if at.get("scrollable") is True:
+            out["at_scrollable"] = True
         return out
 
     async def _apply_scroll_block(self, block: dict[str, Any]) -> None:

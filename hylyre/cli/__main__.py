@@ -721,6 +721,14 @@ def collect_list_cmd(
             "(captures rows above the starting viewport)."
         ),
     ),
+    early_bounce_break: bool = typer.Option(
+        True,
+        "--early-bounce-break/--no-early-bounce-break",
+        help=(
+            "After a swipe, stop immediately if the next dump unchanged (edge bounce). "
+            "Disable to require max-stable-rounds only (legacy)."
+        ),
+    ),
 ) -> None:
     """Swipe UP inside a scroll container and merge Text rows until stable."""
     collect_cmd.run_collect_list_cli(
@@ -739,6 +747,7 @@ def collect_list_cmd(
         max_stable_rounds=max_stable_rounds,
         reset_to_top=reset_to_top,
         bidirectional=bidirectional,
+        early_bounce_break=early_bounce_break,
     )
 
 

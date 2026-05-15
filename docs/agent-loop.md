@@ -87,17 +87,21 @@ hylyre report verify --report report.md --trace trace.json
 对匹配到的滚动容器执行 **`swipe` UP（限定 `area`）→ `dump-ui` → 文本去重合并**，直到连续 **`--max-stable-rounds`** 轮无新增 **`Text`** 行或达到 **`--max-scrolls`**：
 
 - **CLI**：`hylyre collect-list [--session FILE] [--scroll-by-type Scroll] [--scroll-by-id …] [--item-pattern REGEX] [--reset-to-top] [--bidirectional] [--out merged.json]`
-- **MCP**：`hylyre_collect_list`，参数 `session_path`（CLI 会话文件）或 `device_sn`（一次性连接）；可选 **`reset_to_top`**、**`bidirectional`**。
+- **MCP**：`hylyre_collect_list`，参数 `session_path`（CLI 会话文件）或 `device_sn`（一次性连接）；可选 **`reset_to_top`**、**`bidirectional`**、**`early_bounce_break`**。
 
 默认收集 **`Text`** 叶节点字符串；**`--item-pattern`** 对 `id|key|text` 拼接串做正则过滤。
 
-**输出字段补充**：结果 JSON 含 **`iterations_up`** / **`iterations_down`** / **`iterations_reset`**（仅在 **`--reset-to-top`** 时可能 >0）以及 **`reset_to_top` / `bidirectional` 布尔**，便于排查「滚了几轮、是否在相位重置」。
+**输出字段补充**：结果 JSON 含 **`iterations_up`** / **`iterations_down`** / **`iterations_reset`**（仅在 **`--reset-to-top`** 时可能 >0）以及 **`reset_to_top` / `bidirectional` / `early_bounce_break` 布尔**，便于排查「滚了几轮、是否在相位重置」。
 
 **何时加 `--reset-to-top`**：进入半屏 Sheet / 列表后 **滚动位置不确定**（例如从中间状态 resume），先在 **`Scroll` 限定区域内**反复 **`DOWN`** 直到可见 **`Text` 指纹稳定**，再执行常规 **`UP` 合并**，减少漏掉视口上方条目。
 
 **何时加 `--bidirectional`**：在完成 **`UP` pass** 后，再从当前位置 **`DOWN` 合并一轮直到稳定**，用于补齐 **`UP` 起始位置之上**曾落在屏外的项（与 **`reset-to-top`** 互补：`reset` 偏向先到稳定顶端，`bidirectional` 偏向双向扫一遍）。
 
-**默认**：两者均为 **false**，行为与旧版一致。
+**默认**：`reset_to_top` / `bidirectional` 均为 **false**，与旧版一致。
+
+**半屏 Bottom Sheet**：进入后列表通常已在**顶端**，不要默认传 **`reset_to_top`** / **`bidirectional`**，否则易在半屏内反复 **DOWN** 触边回弹。若 **`_hylyre_hints`** 里目标 **`Scroll`** 无 **`likely_more_content_below`**，多表示当前视口已含列表全部可见项。
+
+**`--early-bounce-break`（默认开） / MCP `early_bounce_break`**：一次滑动后若下一帧 dump 的可见 **Text** 指纹与滑前相同（触边未滚动），立即结束该方向；需旧版「只靠连续 **`max_stable_rounds`** 轮无新行才停」时用 **`--no-early-bounce-break`**。
 
 ## 列表与滚屏（`swipe` / `scroll`）
 

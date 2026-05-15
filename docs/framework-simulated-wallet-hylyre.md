@@ -27,7 +27,7 @@ Hypium 原子 CLI 默认每条命令完整 **connect/disconnect**，耗时常被
 - 可选 **`--scroll-by-id`** / **`--scroll-by-key`** 指向唯一列表容器；默认 **`--scroll-by-type Scroll`**。
 - 可选 **`--item-pattern <regex>`** 只保留关心行（对 `id|key|text` 拼接串匹配）。
 
-同时阅读 **`dump-ui` 根字段 `_hylyre_hints`**：若出现 **`likely_more_content_below`**，说明控件树提示仍有屏外内容，**禁止**仅凭首张 dump 断言「已全部枚举」。
+同时阅读 **`dump-ui` 根字段 `_hylyre_hints`**：若出现 **`likely_more_content_below`**，说明控件树提示仍有屏外内容，**禁止**仅凭首张 dump 断言「已全部枚举」。半屏批量添加等 Sheet 上**不要**默认给 **`collect-list`** 加 **`reset_to_top` / `bidirectional`**；无 **`likely_more_content_below`** 时列表往往已在视口内。
 
 ## App 知识：`app page` + `find`
 

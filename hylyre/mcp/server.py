@@ -9,10 +9,12 @@ import sys
 import time
 import traceback
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
+
+from hylyre.diagnostic_log import diagnostic_log as _mcp_log
 
 
 @dataclass
@@ -21,22 +23,26 @@ class _McpSession:
     trace_state: dict[str, Any] | None = None
 
 
-def _mcp_log(message: str) -> None:
-    """Best-effort diagnostics; never write to stdout (stdio transport)."""
-    ts = datetime.now().isoformat(timespec="seconds")
-    line = f"{ts} pid={os.getpid()} {message}\n"
+_T = TypeVar("_T")
+
+
+async def _call_logged_async(
+    tool_name: str, fn: Callable[[], Awaitable[_T]]
+) -> _T:
+    start = time.perf_counter()
+    _mcp_log(f"tool_start name={tool_name}")
     try:
-        log_path = Path.cwd() / ".hylyre" / "mcp-server.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        with log_path.open("a", encoding="utf-8") as f:
-            f.write(line)
+        result = await fn()
     except Exception:
-        pass
-    try:
-        sys.stderr.write(line)
-        sys.stderr.flush()
-    except Exception:
-        pass
+        elapsed = time.perf_counter() - start
+        _mcp_log(
+            f"tool_error name={tool_name} elapsed_s={elapsed:.3f}\n"
+            f"{traceback.format_exc()}"
+        )
+        raise
+    elapsed = time.perf_counter() - start
+    _mcp_log(f"tool_end name={tool_name} elapsed_s={elapsed:.3f}")
+    return result
 
 
 def _call_logged(tool_name: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
@@ -142,20 +148,23 @@ def build_mcp():  # type: ignore[no-untyped-def]
         skip_assert_expected: bool = False,
         model_backend: str | None = None,
     ) -> str:
-        return run_cmd.execute_scenario(
-            plan=Path(plan_path),
-            feature=feature,
-            report_out=Path(report_out),
-            trace_out=Path(trace_out),
-            use_fakes=use_fakes,
-            device_sn=device_sn,
-            bundle=bundle,
-            mock_port=mock_port,
-            lyrebird_url=lyrebird_url,
-            mock_group=mock_group,
-            skip_assert_expected=skip_assert_expected,
-            model_backend=model_backend,
-        )
+        def _run() -> str:
+            return run_cmd.execute_scenario(
+                plan=Path(plan_path),
+                feature=feature,
+                report_out=Path(report_out),
+                trace_out=Path(trace_out),
+                use_fakes=use_fakes,
+                device_sn=device_sn,
+                bundle=bundle,
+                mock_port=mock_port,
+                lyrebird_url=lyrebird_url,
+                mock_group=mock_group,
+                skip_assert_expected=skip_assert_expected,
+                model_backend=model_backend,
+            )
+
+        return _call_logged("hylyre_run_plan", _run)
 
     @mcp.tool(
         name="hylyre_report_verify",
@@ -169,13 +178,16 @@ def build_mcp():  # type: ignore[no-untyped-def]
         trace_path: str,
         plan_path: str | None = None,
     ) -> str:
-        plan_arg = Path(plan_path) if plan_path else None
-        run_cmd.execute_report_verify(
-            report=Path(report_path),
-            trace=Path(trace_path),
-            plan=plan_arg,
-        )
-        return "Contracts OK"
+        def _run() -> str:
+            plan_arg = Path(plan_path) if plan_path else None
+            run_cmd.execute_report_verify(
+                report=Path(report_path),
+                trace=Path(trace_path),
+                plan=plan_arg,
+            )
+            return "Contracts OK"
+
+        return _call_logged("hylyre_report_verify", _run)
 
     @mcp.tool(
         name="hylyre_open_session",
@@ -189,32 +201,38 @@ def build_mcp():  # type: ignore[no-untyped-def]
         mock_port: int | None = None,
         lyrebird_url: str | None = None,
     ) -> str:
-        _mcp_log(f"open_session enter device_sn={device_sn}")
-        t0 = time.perf_counter()
-        agent = create_hypium_agent(
-            device_sn=device_sn,
-            vlm=None,
-            mock_port=mock_port,
-            lyrebird_base_url=lyrebird_url,
-        )
-        _mcp_log(f"open_session agent_created {time.perf_counter()-t0:.2f}s")
-        await agent.ensure_connected()
-        _mcp_log(f"open_session connected {time.perf_counter()-t0:.2f}s")
-        sid = str(uuid.uuid4())
-        sessions[sid] = _McpSession(agent=agent, trace_state=None)
-        _mcp_log(f"open_session done sid={sid} {time.perf_counter()-t0:.2f}s")
-        return json.dumps({"session_id": sid})
+        async def _run() -> str:
+            _mcp_log(f"open_session enter device_sn={device_sn}")
+            t0 = time.perf_counter()
+            agent = create_hypium_agent(
+                device_sn=device_sn,
+                vlm=None,
+                mock_port=mock_port,
+                lyrebird_base_url=lyrebird_url,
+            )
+            _mcp_log(f"open_session agent_created {time.perf_counter()-t0:.2f}s")
+            await agent.ensure_connected()
+            _mcp_log(f"open_session connected {time.perf_counter()-t0:.2f}s")
+            sid = str(uuid.uuid4())
+            sessions[sid] = _McpSession(agent=agent, trace_state=None)
+            _mcp_log(f"open_session done sid={sid} {time.perf_counter()-t0:.2f}s")
+            return json.dumps({"session_id": sid})
+
+        return await _call_logged_async("hylyre_open_session", _run)
 
     @mcp.tool(
         name="hylyre_close_session",
         description="Close MCP session opened by hylyre_open_session.",
     )
     async def hylyre_close_session(session_id: str) -> str:
-        sess = sessions.pop(session_id, None)
-        if sess is None:
-            raise ValueError(f"unknown session_id {session_id!r}")
-        await sess.agent.aclose()
-        return "ok"
+        async def _run() -> str:
+            sess = sessions.pop(session_id, None)
+            if sess is None:
+                raise ValueError(f"unknown session_id {session_id!r}")
+            await sess.agent.aclose()
+            return "ok"
+
+        return await _call_logged_async("hylyre_close_session", _run)
 
     @mcp.tool(
         name="hylyre_screenshot",
@@ -227,21 +245,24 @@ def build_mcp():  # type: ignore[no-untyped-def]
         device_sn: str | None = None,
         session_id: str | None = None,
     ) -> str:
-        if session_id:
-            agent = _session_agent(session_id)
-            raw = await agent.ui.screenshot()
-        else:
-            import anyio
+        async def _run() -> str:
+            if session_id:
+                agent = _session_agent(session_id)
+                raw = await agent.ui.screenshot()
+            else:
+                import anyio
 
-            _mime, raw = await anyio.to_thread.run_sync(
-                lambda: loop_cmd.execute_screenshot_bytes(device_sn=device_sn)
-            )
-        mime = "image/jpeg" if raw.startswith(b"\xff\xd8\xff") else "image/png"
-        payload = {
-            "mime": mime,
-            "base64": base64.standard_b64encode(raw).decode("ascii"),
-        }
-        return json.dumps(payload)
+                _mime, raw = await anyio.to_thread.run_sync(
+                    lambda: loop_cmd.execute_screenshot_bytes(device_sn=device_sn)
+                )
+            mime = "image/jpeg" if raw.startswith(b"\xff\xd8\xff") else "image/png"
+            payload = {
+                "mime": mime,
+                "base64": base64.standard_b64encode(raw).decode("ascii"),
+            }
+            return json.dumps(payload)
+
+        return await _call_logged_async("hylyre_screenshot", _run)
 
     @mcp.tool(
         name="hylyre_dump_ui",
@@ -264,43 +285,46 @@ def build_mcp():  # type: ignore[no-untyped-def]
         full: bool = False,
         summary: bool = False,
     ) -> str:
-        from hylyre.ui_dump_filter import DumpFilterSpec, apply_ui_dump_filter
+        async def _run() -> str:
+            from hylyre.ui_dump_filter import DumpFilterSpec, apply_ui_dump_filter
 
-        kattrs = (
-            frozenset(x.strip() for x in keep_attrs.split(",") if x.strip())
-            if keep_attrs
-            else frozenset()
-        )
-        pattrs = (
-            frozenset(x.strip() for x in prune_attrs.split(",") if x.strip())
-            if prune_attrs
-            else frozenset()
-        )
-        spec = DumpFilterSpec(
-            filter_text=filter_text,
-            filter_id=filter_id,
-            filter_key=filter_key,
-            keep_clickable=keep_clickable,
-            keep_scrollable=keep_scrollable,
-            max_depth=max_depth,
-            keep_attrs=kattrs,
-            prune_attrs=pattrs,
-            full=full,
-            summary=summary,
-        )
-        if session_id:
-            agent = _session_agent(session_id)
-            tree = await agent.dump_ui()
-            tree = apply_ui_dump_filter(tree, spec)
-        else:
-            import anyio
-
-            tree = await anyio.to_thread.run_sync(
-                lambda: loop_cmd.execute_dump_ui_dict(
-                    device_sn=device_sn, dump_filter=spec
-                )
+            kattrs = (
+                frozenset(x.strip() for x in keep_attrs.split(",") if x.strip())
+                if keep_attrs
+                else frozenset()
             )
-        return json.dumps(tree, ensure_ascii=False)
+            pattrs = (
+                frozenset(x.strip() for x in prune_attrs.split(",") if x.strip())
+                if prune_attrs
+                else frozenset()
+            )
+            spec = DumpFilterSpec(
+                filter_text=filter_text,
+                filter_id=filter_id,
+                filter_key=filter_key,
+                keep_clickable=keep_clickable,
+                keep_scrollable=keep_scrollable,
+                max_depth=max_depth,
+                keep_attrs=kattrs,
+                prune_attrs=pattrs,
+                full=full,
+                summary=summary,
+            )
+            if session_id:
+                agent = _session_agent(session_id)
+                tree = await agent.dump_ui()
+                tree = apply_ui_dump_filter(tree, spec)
+            else:
+                import anyio
+
+                tree = await anyio.to_thread.run_sync(
+                    lambda: loop_cmd.execute_dump_ui_dict(
+                        device_sn=device_sn, dump_filter=spec
+                    )
+                )
+            return json.dumps(tree, ensure_ascii=False)
+
+        return await _call_logged_async("hylyre_dump_ui", _run)
 
     @mcp.tool(
         name="hylyre_start_app",
@@ -316,29 +340,32 @@ def build_mcp():  # type: ignore[no-untyped-def]
         mock_port: int | None = None,
         lyrebird_url: str | None = None,
     ) -> str:
-        if session_id:
-            agent = _session_agent(session_id)
-            await agent.start_app(
-                bundle,
-                page_name=page_name,
-                params=params,
-                wait_time=wait_time,
+        async def _run() -> str:
+            if session_id:
+                agent = _session_agent(session_id)
+                await agent.start_app(
+                    bundle,
+                    page_name=page_name,
+                    params=params,
+                    wait_time=wait_time,
+                )
+                return "ok"
+            import anyio
+
+            await anyio.to_thread.run_sync(
+                lambda: loop_cmd.execute_start_app(
+                    bundle=bundle,
+                    device_sn=device_sn,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                    page_name=page_name,
+                    params=params,
+                    wait_time=wait_time,
+                )
             )
             return "ok"
-        import anyio
 
-        await anyio.to_thread.run_sync(
-            lambda: loop_cmd.execute_start_app(
-                bundle=bundle,
-                device_sn=device_sn,
-                mock_port=mock_port,
-                lyrebird_url=lyrebird_url,
-                page_name=page_name,
-                params=params,
-                wait_time=wait_time,
-            )
-        )
-        return "ok"
+        return await _call_logged_async("hylyre_start_app", _run)
 
     @mcp.tool(
         name="hylyre_run_action",
@@ -351,21 +378,24 @@ def build_mcp():  # type: ignore[no-untyped-def]
         mock_port: int | None = None,
         lyrebird_url: str | None = None,
     ) -> str:
-        if session_id:
-            agent = _session_agent(session_id)
-            await agent.run_planned_action(payload)
-            return "ok"
-        import anyio
+        async def _run() -> str:
+            if session_id:
+                agent = _session_agent(session_id)
+                await agent.run_planned_action(payload)
+                return "ok"
+            import anyio
 
-        await anyio.to_thread.run_sync(
-            lambda: loop_cmd.execute_run_action(
-                payload=payload,
-                device_sn=device_sn,
-                mock_port=mock_port,
-                lyrebird_url=lyrebird_url,
+            await anyio.to_thread.run_sync(
+                lambda: loop_cmd.execute_run_action(
+                    payload=payload,
+                    device_sn=device_sn,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                )
             )
-        )
-        return "ok"
+            return "ok"
+
+        return await _call_logged_async("hylyre_run_action", _run)
 
     @mcp.tool(
         name="hylyre_run_tap",
@@ -378,21 +408,24 @@ def build_mcp():  # type: ignore[no-untyped-def]
         mock_port: int | None = None,
         lyrebird_url: str | None = None,
     ) -> str:
-        if session_id:
-            agent = _session_agent(session_id)
-            await agent.run_planned_tap(payload)
-            return "ok"
-        import anyio
+        async def _run() -> str:
+            if session_id:
+                agent = _session_agent(session_id)
+                await agent.run_planned_tap(payload)
+                return "ok"
+            import anyio
 
-        await anyio.to_thread.run_sync(
-            lambda: loop_cmd.execute_run_tap(
-                payload=payload,
-                device_sn=device_sn,
-                mock_port=mock_port,
-                lyrebird_url=lyrebird_url,
+            await anyio.to_thread.run_sync(
+                lambda: loop_cmd.execute_run_tap(
+                    payload=payload,
+                    device_sn=device_sn,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                )
             )
-        )
-        return "ok"
+            return "ok"
+
+        return await _call_logged_async("hylyre_run_tap", _run)
 
     @mcp.tool(
         name="hylyre_run_input",
@@ -405,21 +438,24 @@ def build_mcp():  # type: ignore[no-untyped-def]
         mock_port: int | None = None,
         lyrebird_url: str | None = None,
     ) -> str:
-        if session_id:
-            agent = _session_agent(session_id)
-            await agent.run_planned_input(payload)
-            return "ok"
-        import anyio
+        async def _run() -> str:
+            if session_id:
+                agent = _session_agent(session_id)
+                await agent.run_planned_input(payload)
+                return "ok"
+            import anyio
 
-        await anyio.to_thread.run_sync(
-            lambda: loop_cmd.execute_run_input(
-                payload=payload,
-                device_sn=device_sn,
-                mock_port=mock_port,
-                lyrebird_url=lyrebird_url,
+            await anyio.to_thread.run_sync(
+                lambda: loop_cmd.execute_run_input(
+                    payload=payload,
+                    device_sn=device_sn,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                )
             )
-        )
-        return "ok"
+            return "ok"
+
+        return await _call_logged_async("hylyre_run_input", _run)
 
     @mcp.tool(
         name="hylyre_run_swipe",
@@ -435,21 +471,24 @@ def build_mcp():  # type: ignore[no-untyped-def]
         mock_port: int | None = None,
         lyrebird_url: str | None = None,
     ) -> str:
-        if session_id:
-            agent = _session_agent(session_id)
-            await agent.run_planned_swipe(payload)
-            return "ok"
-        import anyio
+        async def _run() -> str:
+            if session_id:
+                agent = _session_agent(session_id)
+                await agent.run_planned_swipe(payload)
+                return "ok"
+            import anyio
 
-        await anyio.to_thread.run_sync(
-            lambda: loop_cmd.execute_run_swipe(
-                payload=payload,
-                device_sn=device_sn,
-                mock_port=mock_port,
-                lyrebird_url=lyrebird_url,
+            await anyio.to_thread.run_sync(
+                lambda: loop_cmd.execute_run_swipe(
+                    payload=payload,
+                    device_sn=device_sn,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                )
             )
-        )
-        return "ok"
+            return "ok"
+
+        return await _call_logged_async("hylyre_run_swipe", _run)
 
     @mcp.tool(
         name="hylyre_run_scroll",
@@ -465,21 +504,24 @@ def build_mcp():  # type: ignore[no-untyped-def]
         mock_port: int | None = None,
         lyrebird_url: str | None = None,
     ) -> str:
-        if session_id:
-            agent = _session_agent(session_id)
-            await agent.run_planned_scroll(payload)
-            return "ok"
-        import anyio
+        async def _run() -> str:
+            if session_id:
+                agent = _session_agent(session_id)
+                await agent.run_planned_scroll(payload)
+                return "ok"
+            import anyio
 
-        await anyio.to_thread.run_sync(
-            lambda: loop_cmd.execute_run_scroll(
-                payload=payload,
-                device_sn=device_sn,
-                mock_port=mock_port,
-                lyrebird_url=lyrebird_url,
+            await anyio.to_thread.run_sync(
+                lambda: loop_cmd.execute_run_scroll(
+                    payload=payload,
+                    device_sn=device_sn,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                )
             )
-        )
-        return "ok"
+            return "ok"
+
+        return await _call_logged_async("hylyre_run_scroll", _run)
 
     @mcp.tool(
         name="hylyre_report_begin",
@@ -494,20 +536,23 @@ def build_mcp():  # type: ignore[no-untyped-def]
         model_backend: str = "none",
         session_id: str | None = None,
     ) -> str:
-        pp = Path(plan_path) if plan_path else None
-        state = run_cmd.execute_report_begin(
-            feature=feature,
-            trace_path=None,
-            plan_path=pp,
-            trace_state=None,
-            model_backend=model_backend,
-        )
-        if session_id:
-            sess = sessions.get(session_id)
-            if sess is None:
-                raise ValueError(f"unknown session_id {session_id!r}")
-            sess.trace_state = state
-        return json.dumps(state, ensure_ascii=False)
+        def _run() -> str:
+            pp = Path(plan_path) if plan_path else None
+            state = run_cmd.execute_report_begin(
+                feature=feature,
+                trace_path=None,
+                plan_path=pp,
+                trace_state=None,
+                model_backend=model_backend,
+            )
+            if session_id:
+                sess = sessions.get(session_id)
+                if sess is None:
+                    raise ValueError(f"unknown session_id {session_id!r}")
+                sess.trace_state = state
+            return json.dumps(state, ensure_ascii=False)
+
+        return _call_logged("hylyre_report_begin", _run)
 
     @mcp.tool(
         name="hylyre_report_record",
@@ -523,27 +568,34 @@ def build_mcp():  # type: ignore[no-untyped-def]
         trace_state: dict[str, Any] | None = None,
         session_id: str | None = None,
     ) -> str:
-        effective: dict[str, Any] | None = trace_state
-        if session_id:
-            sess = sessions.get(session_id)
-            if sess is None:
-                raise ValueError(f"unknown session_id {session_id!r}")
-            effective = sess.trace_state if trace_state is None else trace_state
-        if effective is None:
-            raise ValueError("Provide trace_state dict or session_id with prior begin")
-        updated = run_cmd.execute_report_record(
-            trace_path=None,
-            trace_state=effective,
-            case_id=case_id,
-            name=name,
-            priority=priority,
-            ac_ref=ac_ref,
-            status=status,
-            notes=notes,
-        )
-        if session_id:
-            sessions[session_id].trace_state = updated
-        return json.dumps(updated, ensure_ascii=False)
+        def _run() -> str:
+            effective_dict: dict[str, Any] | None = trace_state
+            if session_id:
+                sess = sessions.get(session_id)
+                if sess is None:
+                    raise ValueError(f"unknown session_id {session_id!r}")
+                effective_dict = (
+                    sess.trace_state if trace_state is None else trace_state
+                )
+            if effective_dict is None:
+                raise ValueError(
+                    "Provide trace_state dict or session_id with prior begin"
+                )
+            updated = run_cmd.execute_report_record(
+                trace_path=None,
+                trace_state=effective_dict,
+                case_id=case_id,
+                name=name,
+                priority=priority,
+                ac_ref=ac_ref,
+                status=status,
+                notes=notes,
+            )
+            if session_id:
+                sessions[session_id].trace_state = updated
+            return json.dumps(updated, ensure_ascii=False)
+
+        return _call_logged("hylyre_report_record", _run)
 
     @mcp.tool(
         name="hylyre_report_finalize",
@@ -557,46 +609,63 @@ def build_mcp():  # type: ignore[no-untyped-def]
         plan_path: str | None = None,
         model_backend: str | None = None,
     ) -> str:
-        effective = trace_state
-        if session_id:
-            sess = sessions.get(session_id)
-            if sess is None:
-                raise ValueError(f"unknown session_id {session_id!r}")
-            effective = sess.trace_state if trace_state is None else trace_state
-        if effective is None:
-            raise ValueError("Provide trace_state or session_id with recorded cases")
-        pp = Path(plan_path) if plan_path else None
-        msg = run_cmd.execute_report_finalize(
-            trace_path=None,
-            trace_state=effective,
-            plan_path=pp,
-            report_out=Path(report_out),
-            trace_out=Path(trace_out),
-            model_backend=model_backend,
-        )
-        return msg
+        def _run() -> str:
+            effective_finalize = trace_state
+            if session_id:
+                sess = sessions.get(session_id)
+                if sess is None:
+                    raise ValueError(f"unknown session_id {session_id!r}")
+                effective_finalize = (
+                    sess.trace_state if trace_state is None else trace_state
+                )
+            if effective_finalize is None:
+                raise ValueError(
+                    "Provide trace_state or session_id with recorded cases"
+                )
+            pp = Path(plan_path) if plan_path else None
+            return run_cmd.execute_report_finalize(
+                trace_path=None,
+                trace_state=effective_finalize,
+                plan_path=pp,
+                report_out=Path(report_out),
+                trace_out=Path(trace_out),
+                model_backend=model_backend,
+            )
+
+        return _call_logged("hylyre_report_finalize", _run)
 
     @mcp.tool(
         name="hylyre_device_list",
         description="List hdc device serials (requires hdc on PATH).",
     )
     def hylyre_device_list() -> str:
-        return device.format_device_list_text()
+        return _call_logged(
+            "hylyre_device_list",
+            lambda: device.format_device_list_text(),
+        )
 
     @mcp.tool(
         name="hylyre_doctor",
         description="Environment readiness: Python, node, npm, hdc, mitmproxy, lyrebird.",
     )
     def hylyre_doctor() -> str:
-        rows = doctor.gather_doctor_checks()
-        return doctor.format_doctor_plain(rows)
+        def _run() -> str:
+            rows = doctor.gather_doctor_checks()
+            return doctor.format_doctor_plain(rows)
+
+        return _call_logged("hylyre_doctor", _run)
 
     @mcp.tool(
         name="hylyre_ai_action",
         description="One VLM-planned UI action (needs HYLYRE_VLM_* + hylyre[device]).",
     )
     def hylyre_ai_action(instruction: str, device_sn: str | None = None) -> str:
-        return ai_cmd.execute_ai_action(device_sn=device_sn, instruction=instruction)
+        return _call_logged(
+            "hylyre_ai_action",
+            lambda: ai_cmd.execute_ai_action(
+                device_sn=device_sn, instruction=instruction
+            ),
+        )
 
     @mcp.tool(
         name="hylyre_ai_query",
@@ -610,8 +679,11 @@ def build_mcp():  # type: ignore[no-untyped-def]
         device_sn: str | None = None,
         schema: str = "string",
     ) -> str:
-        return ai_cmd.execute_ai_query(
-            device_sn=device_sn, instruction=instruction, schema=schema
+        return _call_logged(
+            "hylyre_ai_query",
+            lambda: ai_cmd.execute_ai_query(
+                device_sn=device_sn, instruction=instruction, schema=schema
+            ),
         )
 
     @mcp.tool(
@@ -619,7 +691,12 @@ def build_mcp():  # type: ignore[no-untyped-def]
         description="VLM assertion on current screen; raises if condition fails.",
     )
     def hylyre_ai_assert(instruction: str, device_sn: str | None = None) -> str:
-        return ai_cmd.execute_ai_assert(device_sn=device_sn, instruction=instruction)
+        return _call_logged(
+            "hylyre_ai_assert",
+            lambda: ai_cmd.execute_ai_assert(
+                device_sn=device_sn, instruction=instruction
+            ),
+        )
 
     @mcp.tool(
         name="hylyre_mock_activate",
@@ -629,14 +706,18 @@ def build_mcp():  # type: ignore[no-untyped-def]
         group_id: str,
         lyrebird_url: str | None = None,
     ) -> str:
-        return mock_cmd.execute_mock_activate(group_id, lyrebird_url)
+        return _call_logged(
+            "hylyre_mock_activate",
+            lambda: mock_cmd.execute_mock_activate(group_id, lyrebird_url),
+        )
 
     @mcp.tool(
         name="hylyre_collect_list",
         description=(
-            "Swipe UP in scroll area and merge Text rows until stable "
-            "(virtualized sheets). Optional reset_to_top (DOWN until stable) "
-            "and bidirectional (extra DOWN pass). "
+            "Swipe UP inside scroll area (default by_type Scroll); merge Text rows. "
+            "Half-modal sheets already start at top: do NOT pass reset_to_top or "
+            "bidirectional unless you intentionally need DOWN sweeps. "
+            "If hints lack likely_more_content_below, the list likely fits the viewport. "
             "session_id, session_path, or device_sn."
         ),
     )
@@ -656,47 +737,52 @@ def build_mcp():  # type: ignore[no-untyped-def]
         max_stable_rounds: int = 2,
         reset_to_top: bool = False,
         bidirectional: bool = False,
+        early_bounce_break: bool = True,
     ) -> str:
         from hylyre.cli.commands import collect_cmd
 
-        modes = sum(bool(x) for x in (session_id, session_path, device_sn))
-        if modes > 1:
-            raise ValueError(
-                "pass at most one of session_id, session_path, device_sn "
-                "(omit device_sn when using MCP session_id)"
+        async def _run() -> str:
+            modes = sum(bool(x) for x in (session_id, session_path, device_sn))
+            if modes > 1:
+                raise ValueError(
+                    "pass at most one of session_id, session_path, device_sn "
+                    "(omit device_sn when using MCP session_id)"
+                )
+
+            payload = {
+                "scroll_by_type": scroll_by_type,
+                "scroll_by_text": scroll_by_text,
+                "scroll_by_id": scroll_by_id,
+                "scroll_by_key": scroll_by_key,
+                "item_pattern": item_pattern,
+                "max_scrolls": max_scrolls,
+                "swipe_distance": swipe_distance,
+                "max_stable_rounds": max_stable_rounds,
+                "reset_to_top": reset_to_top,
+                "bidirectional": bidirectional,
+                "early_bounce_break": early_bounce_break,
+            }
+
+            if session_id:
+                agent = _session_agent(session_id)
+                result = await collect_cmd.collect_list_on_agent(agent, payload)
+                return json.dumps(result, ensure_ascii=False)
+
+            import anyio
+
+            sess = Path(session_path) if session_path else None
+            result = await anyio.to_thread.run_sync(
+                lambda: collect_cmd.execute_collect_list(
+                    params=payload,
+                    device_sn=device_sn,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                    session_file=sess,
+                )
             )
-
-        payload = {
-            "scroll_by_type": scroll_by_type,
-            "scroll_by_text": scroll_by_text,
-            "scroll_by_id": scroll_by_id,
-            "scroll_by_key": scroll_by_key,
-            "item_pattern": item_pattern,
-            "max_scrolls": max_scrolls,
-            "swipe_distance": swipe_distance,
-            "max_stable_rounds": max_stable_rounds,
-            "reset_to_top": reset_to_top,
-            "bidirectional": bidirectional,
-        }
-
-        if session_id:
-            agent = _session_agent(session_id)
-            result = await collect_cmd.collect_list_on_agent(agent, payload)
             return json.dumps(result, ensure_ascii=False)
 
-        import anyio
-
-        sess = Path(session_path) if session_path else None
-        result = await anyio.to_thread.run_sync(
-            lambda: collect_cmd.execute_collect_list(
-                params=payload,
-                device_sn=device_sn,
-                mock_port=mock_port,
-                lyrebird_url=lyrebird_url,
-                session_file=sess,
-            )
-        )
-        return json.dumps(result, ensure_ascii=False)
+        return await _call_logged_async("hylyre_collect_list", _run)
 
     @mcp.tool(
         name="hylyre_find",
@@ -718,23 +804,26 @@ def build_mcp():  # type: ignore[no-untyped-def]
     ) -> str:
         from hylyre.cli.commands.find_cmd import find_in_payload
 
-        if not any((by_text, by_id_pattern, by_key_pattern)):
-            raise ValueError(
-                "pass at least one of by_text, by_id_pattern, by_key_pattern"
+        async def _run() -> str:
+            if not any((by_text, by_id_pattern, by_key_pattern)):
+                raise ValueError(
+                    "pass at least one of by_text, by_id_pattern, by_key_pattern"
+                )
+            payload = await _live_ui_payload_full(
+                session_id=session_id,
+                session_path=session_path,
+                device_sn=device_sn,
             )
-        payload = await _live_ui_payload_full(
-            session_id=session_id,
-            session_path=session_path,
-            device_sn=device_sn,
-        )
-        result = find_in_payload(
-            payload,
-            by_text=by_text,
-            by_id_pattern=by_id_pattern,
-            by_key_pattern=by_key_pattern,
-            limit=limit,
-        )
-        return json.dumps(result, ensure_ascii=False)
+            result = find_in_payload(
+                payload,
+                by_text=by_text,
+                by_id_pattern=by_id_pattern,
+                by_key_pattern=by_key_pattern,
+                limit=limit,
+            )
+            return json.dumps(result, ensure_ascii=False)
+
+        return await _call_logged_async("hylyre_find", _run)
 
     @mcp.tool(
         name="hylyre_app_page_save",
@@ -758,31 +847,35 @@ def build_mcp():  # type: ignore[no-untyped-def]
         from hylyre.app_store.page_store import save_page_snapshot
         from hylyre.app_store.paths import resolve_write_dir
 
-        if from_dump:
-            if any((session_id, session_path, device_sn)):
-                raise ValueError(
-                    "from_dump is mutually exclusive with session_id/session_path/device_sn"
+        async def _run() -> str:
+            if from_dump:
+                if any((session_id, session_path, device_sn)):
+                    raise ValueError(
+                        "from_dump is mutually exclusive with "
+                        "session_id/session_path/device_sn"
+                    )
+                payload = json.loads(Path(from_dump).read_text(encoding="utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("from_dump JSON must be an object")
+            else:
+                payload = await _live_ui_payload_full(
+                    session_id=session_id,
+                    session_path=session_path,
+                    device_sn=device_sn,
                 )
-            payload = json.loads(Path(from_dump).read_text(encoding="utf-8"))
-            if not isinstance(payload, dict):
-                raise ValueError("from_dump JSON must be an object")
-        else:
-            payload = await _live_ui_payload_full(
-                session_id=session_id,
-                session_path=session_path,
-                device_sn=device_sn,
+            write_root = resolve_write_dir(store_dir)
+            path = save_page_snapshot(
+                store_dir=write_root,
+                bundle=bundle,
+                page_name=name,
+                tree_payload=payload,
+                ability_name=ability_name,
+                app_version=app_version,
+                auto_fingerprint=auto_fingerprint,
             )
-        write_root = resolve_write_dir(store_dir)
-        path = save_page_snapshot(
-            store_dir=write_root,
-            bundle=bundle,
-            page_name=name,
-            tree_payload=payload,
-            ability_name=ability_name,
-            app_version=app_version,
-            auto_fingerprint=auto_fingerprint,
-        )
-        return json.dumps({"path": str(path.resolve())}, ensure_ascii=False)
+            return json.dumps({"path": str(path.resolve())}, ensure_ascii=False)
+
+        return await _call_logged_async("hylyre_app_page_save", _run)
 
     @mcp.tool(
         name="hylyre_app_page_load",
@@ -796,15 +889,18 @@ def build_mcp():  # type: ignore[no-untyped-def]
         from hylyre.app_store.page_store import load_page_snapshot
         from hylyre.app_store.paths import resolve_read_dirs
 
-        last_err: Exception | None = None
-        for d in resolve_read_dirs(store_dir):
-            try:
-                snap = load_page_snapshot(d, bundle, name)
-                return json.dumps(snap, ensure_ascii=False)
-            except FileNotFoundError as e:
-                last_err = e
-                continue
-        raise FileNotFoundError(str(last_err or "snapshot not found"))
+        def _run() -> str:
+            last_err: Exception | None = None
+            for d in resolve_read_dirs(store_dir):
+                try:
+                    snap = load_page_snapshot(d, bundle, name)
+                    return json.dumps(snap, ensure_ascii=False)
+                except FileNotFoundError as e:
+                    last_err = e
+                    continue
+            raise FileNotFoundError(str(last_err or "snapshot not found"))
+
+        return _call_logged("hylyre_app_page_load", _run)
 
     @mcp.tool(
         name="hylyre_app_page_list",
@@ -817,10 +913,13 @@ def build_mcp():  # type: ignore[no-untyped-def]
         from hylyre.app_store.page_store import list_page_snapshots
         from hylyre.app_store.paths import resolve_read_dirs
 
-        names: set[str] = set()
-        for d in resolve_read_dirs(store_dir):
-            names.update(list_page_snapshots(d, bundle))
-        return json.dumps(sorted(names), ensure_ascii=False)
+        def _run() -> str:
+            names: set[str] = set()
+            for d in resolve_read_dirs(store_dir):
+                names.update(list_page_snapshots(d, bundle))
+            return json.dumps(sorted(names), ensure_ascii=False)
+
+        return _call_logged("hylyre_app_page_list", _run)
 
     @mcp.tool(
         name="hylyre_app_page_diff",
@@ -841,28 +940,31 @@ def build_mcp():  # type: ignore[no-untyped-def]
         from hylyre.app_store.page_store import diff_snapshots, load_page_snapshot
         from hylyre.app_store.paths import resolve_read_dirs
 
-        snap = None
-        for d in resolve_read_dirs(store_dir):
-            try:
-                snap = load_page_snapshot(d, bundle, name)
-                break
-            except FileNotFoundError:
-                continue
-        if snap is None:
-            raise FileNotFoundError("snapshot not found")
-        if against == "current":
-            cur = await _live_ui_payload_full(
-                session_id=session_id,
-                session_path=session_path,
-                device_sn=device_sn,
-            )
-        else:
-            cur_raw = json.loads(Path(against).read_text(encoding="utf-8"))
-            if not isinstance(cur_raw, dict):
-                raise ValueError("against file must be a JSON object")
-            cur = cur_raw
-        out = diff_snapshots(snap, cur)
-        return json.dumps(out, ensure_ascii=False)
+        async def _run() -> str:
+            snap = None
+            for d in resolve_read_dirs(store_dir):
+                try:
+                    snap = load_page_snapshot(d, bundle, name)
+                    break
+                except FileNotFoundError:
+                    continue
+            if snap is None:
+                raise FileNotFoundError("snapshot not found")
+            if against == "current":
+                cur = await _live_ui_payload_full(
+                    session_id=session_id,
+                    session_path=session_path,
+                    device_sn=device_sn,
+                )
+            else:
+                cur_raw = json.loads(Path(against).read_text(encoding="utf-8"))
+                if not isinstance(cur_raw, dict):
+                    raise ValueError("against file must be a JSON object")
+                cur = cur_raw
+            out = diff_snapshots(snap, cur)
+            return json.dumps(out, ensure_ascii=False)
+
+        return await _call_logged_async("hylyre_app_page_diff", _run)
 
     @mcp.tool(
         name="hylyre_app_page_delete",
@@ -876,8 +978,11 @@ def build_mcp():  # type: ignore[no-untyped-def]
         from hylyre.app_store.page_store import delete_page_snapshot
         from hylyre.app_store.paths import resolve_write_dir
 
-        delete_page_snapshot(resolve_write_dir(store_dir), bundle, name)
-        return json.dumps({"status": "ok"}, ensure_ascii=False)
+        def _run() -> str:
+            delete_page_snapshot(resolve_write_dir(store_dir), bundle, name)
+            return json.dumps({"status": "ok"}, ensure_ascii=False)
+
+        return _call_logged("hylyre_app_page_delete", _run)
 
     @mcp.tool(
         name="hylyre_app_find",
@@ -894,13 +999,16 @@ def build_mcp():  # type: ignore[no-untyped-def]
     ) -> str:
         from hylyre.app_store.cross_find import search_all_indexes
 
-        hits = search_all_indexes(
-            bundle,
-            by_text=by_text,
-            by_id_pattern=by_id_pattern,
-            store_dir=store_dir,
-        )
-        return json.dumps(hits, ensure_ascii=False)
+        def _run() -> str:
+            hits = search_all_indexes(
+                bundle,
+                by_text=by_text,
+                by_id_pattern=by_id_pattern,
+                store_dir=store_dir,
+            )
+            return json.dumps(hits, ensure_ascii=False)
+
+        return _call_logged("hylyre_app_find", _run)
 
     @mcp.tool(
         name="hylyre_app_fingerprint",
@@ -917,32 +1025,54 @@ def build_mcp():  # type: ignore[no-untyped-def]
     ) -> str:
         from hylyre.app_store.fingerprint import compute_ui_fingerprint
 
-        if from_dump:
-            if any((session_id, session_path, device_sn)):
-                raise ValueError(
-                    "from_dump is mutually exclusive with session_id/session_path/device_sn"
+        async def _run() -> str:
+            if from_dump:
+                if any((session_id, session_path, device_sn)):
+                    raise ValueError(
+                        "from_dump is mutually exclusive with "
+                        "session_id/session_path/device_sn"
+                    )
+                payload = json.loads(Path(from_dump).read_text(encoding="utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("from_dump JSON must be an object")
+            else:
+                payload = await _live_ui_payload_full(
+                    session_id=session_id,
+                    session_path=session_path,
+                    device_sn=device_sn,
                 )
-            payload = json.loads(Path(from_dump).read_text(encoding="utf-8"))
-            if not isinstance(payload, dict):
-                raise ValueError("from_dump JSON must be an object")
-        else:
-            payload = await _live_ui_payload_full(
-                session_id=session_id,
-                session_path=session_path,
-                device_sn=device_sn,
-            )
-        tree = payload.get("tree")
-        if not isinstance(tree, dict):
-            raise ValueError("payload missing tree dict")
-        fp, lines = compute_ui_fingerprint(tree)
-        return json.dumps({"fingerprint": fp, "inputs": lines}, ensure_ascii=False)
+            tree = payload.get("tree")
+            if not isinstance(tree, dict):
+                raise ValueError("payload missing tree dict")
+            fp, lines = compute_ui_fingerprint(tree)
+            return json.dumps({"fingerprint": fp, "inputs": lines}, ensure_ascii=False)
+
+        return await _call_logged_async("hylyre_app_fingerprint", _run)
 
     @mcp.tool(
         name="hylyre_progress_show",
         description="Tail of docs/progress.md from repo root (cwd). Default last 120 lines.",
     )
     def hylyre_progress_show(tail_lines: int = 120) -> str:
-        return progress_store.format_progress_excerpt(tail_lines=tail_lines)
+        return _call_logged(
+            "hylyre_progress_show",
+            lambda: progress_store.format_progress_excerpt(tail_lines=tail_lines),
+        )
+
+    try:
+        from hylyre.app_store.paths import resolve_write_dir
+
+        _wd = resolve_write_dir(None)
+        _mcp_log(f"app_store write_dir={_wd}")
+        _cwd = Path.cwd()
+        if Path.home() in _wd.resolve().parents and not (_cwd / "pyproject.toml").is_file():
+            _mcp_log(
+                f"app_store_warning cwd={_cwd} not a Hylyre repo root; "
+                "snapshots may land under home. Set HYLYRE_APP_STORE_DIR or "
+                "point Cursor MCP cwd at the Hylyre checkout (see docs/cursor-mcp-setup.md)."
+            )
+    except Exception as e:
+        _mcp_log(f"app_store_probe_failed {e}")
 
     _mcp_log("build_mcp end")
     return mcp

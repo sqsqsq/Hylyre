@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
+
+from hylyre.diagnostic_log import diagnostic_log
 
 
 _BOUNDS_RE = re.compile(r"^\[(\d+),(\d+)\]\[(\d+),(\d+)\]$")
@@ -57,8 +60,12 @@ def augment_ui_dump_payload(payload: dict[str, Any]) -> dict[str, Any]:
     out = dict(payload)
     tree = out.get("tree")
     scroll_hints: list[dict[str, Any]] = []
+    t_w = time.perf_counter()
     if isinstance(tree, dict):
         _walk_scroll_hints(tree, scroll_hints, 0)
+    diagnostic_log(
+        f"augment_ui_dump_payload walk_ms={(time.perf_counter() - t_w) * 1000:.1f}"
+    )
     out["_hylyre_hints"] = {
         "scrollable_containers": scroll_hints[:80],
         "scrollable_container_count": len(scroll_hints),
