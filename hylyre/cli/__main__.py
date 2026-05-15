@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+import json
 import typer
 
 from hylyre.cli.commands import (
@@ -21,6 +22,7 @@ from hylyre.cli.commands import (
     run_cmd,
     session_cmd,
     spec_cmd,
+    steps_cmd,
 )
 from hylyre.ui_dump_filter import DumpFilterSpec
 
@@ -32,7 +34,7 @@ app = typer.Typer(
 report_app = typer.Typer(help="Test report tools")
 app.add_typer(report_app, name="report")
 
-run_app = typer.Typer(help="Run test plans or atomic Hypium JSON steps")
+run_app = typer.Typer(help="Run test plans (--plan / --steps), or atomic Hypium JSON steps")
 app.add_typer(run_app, name="run")
 
 device_app = typer.Typer(help="Device helpers (HDC + Hypium)")
@@ -184,6 +186,49 @@ def run_plan_batch(
         readable=True,
         help="test-plan.md — batch mode when no subcommand.",
     ),
+    steps: Optional[str] = typer.Option(
+        None,
+        "--steps",
+        help=(
+            "JSON array of planned step objects, e.g. "
+            '\'[{"touch":{"by_id":"x"}}]\' (mutually exclusive with --steps-file).'
+        ),
+    ),
+    steps_file: Optional[Path] = typer.Option(
+        None,
+        "--steps-file",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+        help="Path to JSON file: array of planned step objects (--plan excludes this).",
+    ),
+    on_fail: str = typer.Option(
+        "abort",
+        "--on-fail",
+        help="abort: stop on first error; skip: record error and continue.",
+    ),
+    steps_out: Optional[Path] = typer.Option(
+        None,
+        "--out",
+        "-o",
+        help="Write batch steps result JSON (default: stdout).",
+    ),
+    session: Optional[Path] = typer.Option(
+        None,
+        "--session",
+        "-S",
+        help="Session JSON from `hylyre session start` (reuse Hypium connection).",
+    ),
+    page_name: Optional[str] = typer.Option(
+        None,
+        "--page-name",
+        help="Hypium ability name — used with --bundle when batching steps.",
+    ),
+    start_wait_time: float = typer.Option(
+        1.0,
+        "--wait-time",
+        help="start_app wait (seconds; only with --bundle on steps batch).",
+    ),
     feature: Optional[str] = typer.Option(
         None,
         "--feature",
@@ -240,12 +285,66 @@ def run_plan_batch(
         help="trace.json model_backend override.",
     ),
 ) -> None:
-    """Batch: ``hylyre run --plan …``. Subcommands: action / tap / input / swipe / scroll / start-app."""
+    """Batch: ``hylyre run --plan …`` or ``hylyre run --steps-file …``.
+    Subcommands: action / tap / input / swipe / scroll / start-app."""
     if ctx.invoked_subcommand is not None:
         return
+    has_plan = plan is not None
+    has_steps = steps is not None or steps_file is not None
+
+    if has_plan and has_steps:
+        typer.secho(
+            "Cannot combine --plan with --steps/--steps-file.",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if has_steps:
+        if steps is not None and steps_file is not None:
+            typer.secho(
+                "Pass at most one of --steps or --steps-file.",
+                err=True,
+            )
+            raise typer.Exit(2)
+        try:
+            if steps_file is not None:
+                step_list = steps_cmd.load_steps_json_array(Path(steps_file))
+            elif steps is not None:
+                step_list = steps_cmd.parse_steps_inline(steps)
+            else:
+                raise AssertionError("unreachable")
+        except Exception as e:
+            typer.secho(f"Invalid steps JSON: {e}", err=True)
+            raise typer.Exit(2)
+        try:
+            result_dict = steps_cmd.execute_run_steps(
+                step_list,
+                device_sn=device_sn,
+                mock_port=mock_port,
+                lyrebird_url=lyrebird_url,
+                session_file=session,
+                on_fail=on_fail,
+                bundle=bundle,
+                page_name=page_name,
+                wait_time=start_wait_time,
+            )
+        except Exception as e:
+            typer.secho(str(e), err=True)
+            raise typer.Exit(1)
+        text = json.dumps(result_dict, ensure_ascii=False, indent=2)
+        if steps_out is not None:
+            steps_out.parent.mkdir(parents=True, exist_ok=True)
+            steps_out.write_text(text + "\n", encoding="utf-8")
+            typer.echo(str(steps_out.resolve()))
+        else:
+            typer.echo(text)
+        any_err = any(r.get("status") != "ok" for r in result_dict.get("results", []))
+        raise typer.Exit(1 if any_err else 0)
+
     if plan is None:
         typer.secho(
-            "Batch mode needs --plan (or use a subcommand; try `hylyre run --help`).",
+            "Batch mode requires --plan, or --steps/--steps-file "
+            "(or use a subcommand; try `hylyre run --help`).",
             err=True,
         )
         raise typer.Exit(2)

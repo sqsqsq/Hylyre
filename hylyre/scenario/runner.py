@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from hylyre.api.agent import HylyreAgent
+from hylyre.api.step_dispatch import dispatch_planned_step
 from hylyre.scenario.plan_parse import ParsedPlan, TestCase, parse_test_plan
 
 
@@ -168,21 +169,7 @@ async def _execute_one_step(
         return
     if _JSONISH.match(s):
         payload = json.loads(s)
-        if "action" in payload:
-            await agent.run_planned_action(payload)
-        elif "touch" in payload:
-            await agent.run_planned_tap(payload)
-        elif "input" in payload:
-            await agent.run_planned_input(payload)
-        elif "swipe" in payload:
-            await agent.run_planned_swipe(payload)
-        elif "scroll" in payload:
-            await agent.run_planned_scroll(payload)
-        else:
-            raise ValueError(
-                f"{case_id}: JSON step must contain one of: action, touch, input, "
-                f"swipe, scroll"
-            )
+        await dispatch_planned_step(agent, payload, case_id=case_id)
         tool_log.append({"case": case_id, "kind": "planned_json", "payload": payload})
         return
     if agent.vlm is None:

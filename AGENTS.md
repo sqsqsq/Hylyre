@@ -9,17 +9,17 @@
 
 ## 每轮对话里你应该怎么做（默认行为）
 
-1. **若 MCP 可用**：优先用 **`hylyre_run_plan`**、**`hylyre_report_*`**、**`hylyre_doctor`**、**`hylyre_device_list`**、**`hylyre_dump_ui`** / **`hylyre_screenshot`**、**`hylyre_run_*`**（planned JSON：`action` / `tap` / `input` / **`swipe`** / **`scroll`**）、**`hylyre_collect_list`**、**`hylyre_find`**、**`hylyre_app_page_*`**（快照 CRUD）、**`hylyre_app_find`**、**`hylyre_app_fingerprint`**，以及按需的 **`hylyre_ai_*`**；路径用**绝对路径**或相对 **仓库根** 的明确路径。
+1. **若 MCP 可用**：优先用 **`hylyre_run_plan`**、**`hylyre_report_*`**、**`hylyre_doctor`**、**`hylyre_device_list`**、**`hylyre_dump_ui`** / **`hylyre_screenshot`**、**`hylyre_run_*`**（planned JSON：`action` / `tap` / `input` / **`swipe`** / **`scroll`**；若连续多步已定，一次性 **`hylyre_run_steps`**）、**`hylyre_collect_list`**、**`hylyre_find`**、**`hylyre_app_page_*`**（快照 CRUD）、**`hylyre_app_find`**、**`hylyre_app_fingerprint`**，以及按需的 **`hylyre_ai_*`**；路径用**绝对路径**或相对 **仓库根** 的明确路径。
 2. **若 MCP 不可用**：在**仓库根**终端执行 `python -m hylyre …`（与 CLI 帮助一致）。**CLI 与 MCP 共享同一套逻辑**（强 CLI / 弱 MCP 薄壳）。**连接复用**：MCP 侧 **`hylyre_open_session`**；CLI 侧长时间原子循环用 **`hylyre session start`**，后续命令加 **`--session`**（见 [`docs/agent-loop.md`](docs/agent-loop.md)）。
 3. **用户用自然语言描述用例、又不想配运行态 VLM**：
-   - **已知 selector / 稳定文案**：按 **做法 A** 写 `test-plan.md`「测试步骤」列（仅 **JSON**：`action` / `touch` / `input`）。规约见 [`docs/agent-plan-a.md`](docs/agent-plan-a.md)。
+   - **已知 selector / 稳定文案**：按 **做法 A** 写 `test-plan.md`「测试步骤」列（仅 **JSON**：`action` / `touch` / `input`）。规约见 [`docs/agent-plan-a.md`](docs/agent-plan-a.md)。若同一对话里已连续多步已知，可先用 **`python -m hylyre run --steps-file`**（会话内 **`--session`**）批量执行以降低进程启动开销，再写回归计划。
    - **需要先感知当前界面**：用 **原子循环**（`dump-ui` / `screenshot` + `run …` + `report …`）。对 **已知 bundle** 可先 **`app page load` / `app find`**（或 MCP **`hylyre_app_page_load`** / **`hylyre_app_find`**），详见 **[docs/app-knowledge.md](docs/app-knowledge.md)**。**dump-ui** 含 **`_hylyre_hints`**（scrollable / 可能仍有屏外内容）；要数清虚拟列表优先 **`hylyre collect-list`** / MCP **`hylyre_collect_list`**。用户 **未写滑动手势** 时的默认纪律见 [`docs/agent-loop.md`](docs/agent-loop.md) **「自然语言未约定手势时」**；列表与半屏模态见同页 **「列表与滚屏」**。
 
 ## 最短命令备忘
 
 - 离线烟测：`hylyre run --plan <plan.md> --feature <slug> --report-out <report.md> --trace-out <trace.json> --use-fakes`
 - 校验：`hylyre report verify --report … --trace … [--plan …]`（ad-hoc 报告可省略 `--plan`）
-- 原子循环（节选）：`hylyre dump-ui`、`hylyre screenshot`、`hylyre find`（输出 **`hits` + `_hylyre_hints`**）、`hylyre app page …` / `hylyre app find`、`hylyre run action|tap|input|swipe|scroll`。**多条 CLI 串联真机**时用 **`hylyre session start`** + 各命令 **`--session <.hylyre/session.json>`**，结束前 **`hylyre session stop`**。**枚举半屏长列表**：`hylyre collect-list`（可选 **`--reset-to-top` / `--bidirectional`**；MCP **`hylyre_collect_list`**）。**半屏浮层里滚动列表**须在 **`swipe.area` / `scroll.at`**（常用 **`by_type: Scroll`**）内操作，或使用 **`run swipe --area-by-type Scroll`** / **`run scroll --at-by-type Scroll`**，避免全屏下滑关掉 Sheet（详见 [`docs/agent-loop.md`](docs/agent-loop.md)）。
+- 原子循环（节选）：`hylyre dump-ui`、`hylyre screenshot`、`hylyre find`（输出 **`hits` + `_hylyre_hints`**）、`hylyre app page …` / `hylyre app find`、`hylyre run action|tap|input|swipe|scroll`。**若干已知步骤可一条命令跑**：`hylyre run --steps-file nav.json --session …`（或 MCP **`hylyre_run_steps`**），减少多次 `run tap`/MCP 往返。**多条 CLI 串联真机**时用 **`hylyre session start`** + 各命令 **`--session <.hylyre/session.json>`**，结束前 **`hylyre session stop`**。**枚举半屏长列表**：`hylyre collect-list`（可选 **`--reset-to-top` / `--bidirectional`**；MCP **`hylyre_collect_list`**）。**半屏浮层里滚动列表**须在 **`swipe.area` / `scroll.at`**（常用 **`by_type: Scroll`**）内操作，或使用 **`run swipe --area-by-type Scroll`** / **`run scroll --at-by-type Scroll`**，避免全屏下滑关掉 Sheet（详见 [`docs/agent-loop.md`](docs/agent-loop.md)）。
 - 增量报告：`hylyre report begin` → `hylyre report record` → `hylyre report finalize`
 - 真机：去掉 `--use-fakes`，安装 `hylyre[device]`，按需 `--device-sn`、`--bundle`、`--skip-assert-expected`（JSON 步骤 + 无 VLM 时常用）。
 

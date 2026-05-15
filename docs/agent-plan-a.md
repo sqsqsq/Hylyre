@@ -46,6 +46,16 @@
 
 字段名与 [`agent-loop.md`](./agent-loop.md) 中 **列表与滚屏**、**自然语言未约定手势时** 两小节一致。
 
+### 2.3 批量：`hylyre run --steps-file`（无 `test-plan.md`）
+
+已知多步 planned JSON，且**暂不需要** `test-report.md` / `trace.json` / L5 Harness 闭环时（例如本地快速重放、`session` + 多条 `tap`），可用 **JSON 文件数组**批量执行：
+
+```bash
+hylyre run --steps-file nav.json --session .hylyre/session.json --on-fail abort --out steps-result.json
+```
+
+与 **`hylyre run --plan`** **互斥**；步骤对象根键与本节 2.1 相同。**CI / Skill 6 / 可追溯报告**仍以 **`run --plan … --report-out --trace-out`** 为准。
+
 ## 3. 预期结果列与 VLM
 
 `runner._run_case_on_agent` 中：仅当 **`agent.vlm is not None` 且 `check_expected`** 时才会对「预期结果」列调用 `ai_assert`。
@@ -77,7 +87,7 @@ hylyre run \
 
 ## 5. 与 Cursor、MCP 的衔接
 
-**一次性配置**：在 Cursor 里启用 Hylyre MCP 的步骤见 [`docs/cursor-mcp-setup.md`](./cursor-mcp-setup.md)。配置后 Agent 可用 **`hylyre_run_plan`**、`hylyre_dump_ui`、`hylyre_run_*`、`hylyre_report_*` 等工具；与 CLI **同一套 `execute_*` 逻辑**（见 [`agent-loop.md`](./agent-loop.md)）。
+**一次性配置**：在 Cursor 里启用 Hylyre MCP 的步骤见 [`docs/cursor-mcp-setup.md`](./cursor-mcp-setup.md)。配置后 Agent 可用 **`hylyre_run_plan`**、`hylyre_dump_ui`、`hylyre_run_*`、**`hylyre_run_steps`**、`hylyre_report_*` 等工具；与 CLI **同一套 `execute_*` 逻辑**（见 [`agent-loop.md`](./agent-loop.md)）。
 
 **仓库内约定（已提交）**：
 

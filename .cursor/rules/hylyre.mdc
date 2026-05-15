@@ -14,6 +14,15 @@ alwaysApply: true
 1. **若当前会话已连接 Hylyre MCP**（工具名形如 `hylyre_run_plan`、`hylyre_doctor`）：优先用 MCP，路径参数用**绝对路径**。
 2. **否则**：在**仓库根目录**执行 **`python -m hylyre …`**（与 CLI `--help` 一致）。**能力与 MCP 对等**（MCP 为薄壳）。**CLI** 长时间原子循环可用 **`hylyre session start`** + **`--session`**；**MCP** 进程内复用见 **`hylyre_open_session`**（说明见 **`docs/agent-loop.md`**）。
 
+## 批量步骤（优先于逐个单步）
+
+已知 **2 个及以上连续** planned JSON 步骤（如已从 **`hylyre_app_find`** 拿到的导航、`app page` 里确认过的 **`by_id`** 序列，或上一轮循环已验证的步骤）：
+
+- **优先**：MCP **`hylyre_run_steps`**（传入 `steps` 数组）；或 CLI **`python -m hylyre run --steps-file *.json`**，并 **`--session`** / MCP 已 **`hylyre_open_session`**。
+- **不要**连续多次只调 **`hylyre_run_tap`** / **`hylyre_run_swipe`**（除非每步都必须读 **`dump_ui`/`screenshot` 后再决定下一步）。
+
+仅在步骤不确定或需逐步感知时再走单步 **`run_*`** / 原子循环。
+
 ## 自然语言测试意图 → 可执行输入
 
 当用户要「不配运行态 VLM」时：

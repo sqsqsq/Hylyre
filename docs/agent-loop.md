@@ -33,6 +33,8 @@ Framework / CI 请固定 **`--store-dir`** 或 **`HYLYRE_APP_STORE_DIR`**，与 
 3. **原子步骤**（单行 planned JSON）：  
    `hylyre run action --json "{\"action\":{\"type\":\"touch\",\"by_text\":\"登录\"}}"`  
    或 `hylyre run tap` / `hylyre run input`（根键分别为 `touch` / `input`）、**`hylyre run swipe`** / **`hylyre run scroll`**（根键分别为 `swipe` / `scroll`，见下文）。上述命令均支持 **`--session`**。
+3b. **批量步骤**（同一会话一条进程跑多步）：  
+   `hylyre run --steps-file nav.json --session …`（或 **`--steps '[ … ]'`**），可选 **`--on-fail abort|skip`**；与 **`--plan` 互斥**。可选 **`--bundle`/`--page-name`/`--wait-time`**：在步骤前先 **`start_app`**。输出结构化 JSON（stdout；或 **`--out` / `-o`** 写文件）。不落 `test-report.md`/`trace.json` —— 仍需 CI / Skill 6 时请用 **`run --plan`**。
 4. **启动应用**（可选）：  
    `hylyre run start-app --bundle com.example.app`（支持 **`--session`**；一次性会话需在 `session start` 时传入相同的 `--mock-port` / `--lyrebird-url`）
 5. **增量报告**（草稿 trace → 最终报告）：  
@@ -53,6 +55,7 @@ hylyre report verify --report report.md --trace trace.json
 
 - `hylyre_dump_ui` / `hylyre_screenshot`（可选 `session_id`）
 - `hylyre_run_action` / `hylyre_run_tap` / `hylyre_run_input` / **`hylyre_run_swipe`** / **`hylyre_run_scroll`** / `hylyre_start_app`
+- **`hylyre_run_steps`**：一次传入 `steps` 数组（与单步相同根键），减少 MCP 往返；或 CLI **`run --steps-file`**
 - **`hylyre_collect_list`**：在半屏列表里滚到底并合并所有可见 **`Text`** 行（可选正则过滤）；等价 CLI：`hylyre collect-list`
 - **`hylyre_find`**：当前屏控件树扁平查找；返回 **`hits`** + 根级 **`_hylyre_hints`**（与 `dump-ui` 同源滚动信号），便于不走整树 dump 时仍能判断是否该转 **`collect-list`**。
 - **`hylyre_app_page_*`** / **`hylyre_app_find`** / **`hylyre_app_fingerprint`**：App 知识持久化（见 **[app-knowledge.md](./app-knowledge.md)**）
@@ -65,7 +68,7 @@ hylyre report verify --report report.md --trace trace.json
 
 1. `hylyre session start [--device-sn SN] [--mock-port P] [--session-file path]`  
    成功后打印会话 JSON 路径（默认 `./.hylyre/session.json`）。
-2. 后续在同目录执行：`hylyre dump-ui -o t.json --session .hylyre/session.json`、`hylyre run swipe ... --session ...`、`hylyre collect-list --session ...`、`hylyre screenshot -o s.jpeg --session ...` 等。
+2. 后续在同目录执行：`hylyre dump-ui -o t.json --session .hylyre/session.json`、`hylyre run --steps-file nav.json --session …`、`hylyre run swipe ... --session ...`、`hylyre collect-list --session ...`、`hylyre screenshot -o s.jpeg --session ...` 等。
 3. `hylyre session stop`（或向 daemon 发 `shutdown` RPC）结束并删除会话文件。
 4. `hylyre session status` 打印 `{alive, pid, ping_ok, …}` JSON。
 

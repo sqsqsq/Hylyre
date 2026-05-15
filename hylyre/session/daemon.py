@@ -53,6 +53,29 @@ async def _dispatch(agent: HylyreAgent, method: str, params: dict[str, Any]) -> 
     if method == "run_scroll":
         await agent.run_planned_scroll(dict(params["payload"]))
         return "ok"
+    if method == "run_steps":
+        from hylyre.cli.commands import steps_cmd as _steps_cmd
+
+        st = params.get("steps") or []
+        if not isinstance(st, list):
+            raise ValueError("run_steps.steps must be a list")
+        step_objs = []
+        for i, row in enumerate(st):
+            if not isinstance(row, dict):
+                raise ValueError(f"run_steps.steps[{i}] must be object")
+            step_objs.append(dict(row))
+        on_fail_p = params.get("on_fail") or "abort"
+        b = params.get("bundle")
+        if b:
+            await agent.start_app(
+                str(b),
+                page_name=params.get("page_name"),
+                params=str(params.get("params") or ""),
+                wait_time=float(params.get("wait_time") or 1.0),
+            )
+        return await _steps_cmd.run_steps_on_agent(
+            agent, step_objs, on_fail=str(on_fail_p)
+        )
     if method == "collect_list":
         from hylyre.cli.commands.collect_cmd import collect_list_on_agent
 

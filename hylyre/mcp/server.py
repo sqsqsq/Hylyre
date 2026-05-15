@@ -80,6 +80,8 @@ def build_mcp():  # type: ignore[no-untyped-def]
             "Safer CI path: hylyre_run_plan use_fakes=true. "
             "Agent-loop (no VLM): dump_ui / screenshot / run_* JSON "
             "(action tap input swipe scroll) + report_* . "
+            "Batch known steps: hylyre_run_steps (list of planned JSON dicts in one call, "
+            "reduces MCP round trips; prefer over repeated run_tap/run_swipe when steps are fixed). "
             "App knowledge: hylyre_find, hylyre_app_* page CRUD + hylyre_app_find / fingerprint. "
             "hylyre_open_session reuses Hypium for faster MCP loops; optional for parity with CLI."
         ),
@@ -522,6 +524,79 @@ def build_mcp():  # type: ignore[no-untyped-def]
             return "ok"
 
         return await _call_logged_async("hylyre_run_scroll", _run)
+
+    @mcp.tool(
+        name="hylyre_run_steps",
+        description=(
+            "Run multiple planned JSON steps (same root keys as run_tap/run_swipe/input/..."
+            ") in one call to cut MCP latency. Exactly one of session_id, "
+            "session_path, device_sn; optional bundle+page_name to start_app first."
+        ),
+    )
+    async def hylyre_run_steps(
+        steps: list[dict[str, Any]],
+        session_id: str | None = None,
+        session_path: str | None = None,
+        device_sn: str | None = None,
+        mock_port: int | None = None,
+        lyrebird_url: str | None = None,
+        on_fail: str = "abort",
+        bundle: str | None = None,
+        page_name: str | None = None,
+        wait_time: float = 1.0,
+        params: str = "",
+    ) -> str:
+        from hylyre.cli.commands import steps_cmd
+
+        async def _run() -> str:
+            modes = sum(bool(x) for x in (session_id, session_path, device_sn))
+            if modes != 1:
+                raise ValueError(
+                    "pass exactly one of session_id, session_path, device_sn"
+                )
+            if not isinstance(steps, list):
+                raise ValueError("steps must be a list")
+
+            normalized: list[dict[str, Any]] = []
+            for i, raw in enumerate(steps):
+                if not isinstance(raw, dict):
+                    raise ValueError(f"steps[{i}] must be object")
+                normalized.append(dict(raw))
+
+            if session_id:
+                agent = _session_agent(session_id)
+                if bundle:
+                    await agent.start_app(
+                        str(bundle),
+                        page_name=page_name,
+                        params=params,
+                        wait_time=float(wait_time),
+                    )
+                out = await steps_cmd.run_steps_on_agent(
+                    agent, normalized, on_fail=on_fail
+                )
+                return json.dumps(out, ensure_ascii=False)
+
+            import anyio
+
+            sess = Path(session_path) if session_path else None
+            result = await anyio.to_thread.run_sync(
+                lambda ns=normalized, ds=device_sn: steps_cmd.execute_run_steps(
+                    ns,
+                    device_sn=ds,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                    session_file=sess,
+                    on_fail=on_fail,
+                    bundle=bundle,
+                    page_name=page_name,
+                    wait_time=wait_time,
+                    params=params,
+                )
+            )
+            return json.dumps(result, ensure_ascii=False)
+
+        return await _call_logged_async("hylyre_run_steps", _run)
 
     @mcp.tool(
         name="hylyre_report_begin",
