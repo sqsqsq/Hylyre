@@ -39,9 +39,15 @@ hylyre = "hylyre.cli.__main__:main"
 where = ["."]
 include = ["hylyre*"]
 
+[tool.setuptools.package-data]
+"hylyre.contracts" = ["*.json", "*.yaml", "*.yml", "*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-v"
+addopts = "-v -m \"not slow\""
+markers = [
+    "slow: pip wheel integration; run in build-wheel CI job",
+]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

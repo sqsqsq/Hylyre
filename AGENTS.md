@@ -17,6 +17,7 @@
 
 ## 最短命令备忘
 
+- 下游 framework vendor：`python scripts/build_wheel.py --clean` → 产出 `dist/release/hylyre-*-py3-none-any.whl` 与 `release.manifest.json`（说明见 [`docs/framework-vendor-bundle.md`](docs/framework-vendor-bundle.md)）
 - 离线烟测：`hylyre run --plan <plan.md> --feature <slug> --report-out <report.md> --trace-out <trace.json> --use-fakes`
 - 校验：`hylyre report verify --report … --trace … [--plan …]`（ad-hoc 报告可省略 `--plan`）
 - 原子循环（节选）：`hylyre dump-ui`、`hylyre screenshot`、`hylyre find`（输出 **`hits` + `_hylyre_hints`**）、`hylyre app page …` / `hylyre app find`、`hylyre run action|tap|input|swipe|scroll`。**若干已知步骤可一条命令跑**：`hylyre run --steps-file nav.json --session …`（或 MCP **`hylyre_run_steps`**），减少多次 `run tap`/MCP 往返。**多条 CLI 串联真机**时用 **`hylyre session start`** + 各命令 **`--session <.hylyre/session.json>`**，结束前 **`hylyre session stop`**。**枚举半屏长列表**：`hylyre collect-list`（可选 **`--reset-to-top` / `--bidirectional`**；MCP **`hylyre_collect_list`**）。**半屏浮层里滚动列表**须在 **`swipe.area` / `scroll.at`**（常用 **`by_type: Scroll`**）内操作，或使用 **`run swipe --area-by-type Scroll`** / **`run scroll --at-by-type Scroll`**，避免全屏下滑关掉 Sheet（详见 [`docs/agent-loop.md`](docs/agent-loop.md)）。

@@ -25,6 +25,17 @@
 "%LocalAppData%\Programs\Python\Python312\python.exe" -m pytest
 ```
 
+### 打 wheel 给下游 framework（vendor）
+
+未在 PyPI 发布时，业务仓可将本仓库产出的 **`py3-none-any`** wheel 提交到其 `vendor/`。一条命令：
+
+```bat
+python scripts\build_wheel.py --clean
+python scripts\build_wheel.py --verify dist\release
+```
+
+详见 **[docs/framework-vendor-bundle.md](docs/framework-vendor-bundle.md)**。
+
 全局 OpenSpec CLI（已 npm 安装时 PATH 需含 `%AppData%\npm`）：
 
 ```bash

@@ -76,7 +76,9 @@ def test_install_hap_missing_hdc(mock_which: MagicMock, tmp_path: Path) -> None:
         hdc_cli.install_hap(hap)
 
 
-def test_install_hap_not_a_file(tmp_path: Path) -> None:
+@patch("hylyre.drivers.hypium.hdc_cli.shutil.which")
+def test_install_hap_not_a_file(mock_which: MagicMock, tmp_path: Path) -> None:
+    mock_which.return_value = "/bin/hdc"
     with pytest.raises(FileNotFoundError):
         hdc_cli.install_hap(tmp_path / "nope.hap")
 
