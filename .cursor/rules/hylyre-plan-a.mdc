@@ -29,6 +29,13 @@ alwaysApply: false
 4. **swipe** / **scroll**（与原子 CLI `run swipe` / `run scroll`、MCP `hylyre_run_swipe` / `hylyre_run_scroll` 一致；竖向列表、半屏模态见 **`docs/agent-loop.md`**）
    - `{"swipe":{"direction":"UP","distance":65,"area":{"by_type":"Scroll"}}}`
    - `{"scroll":{"direction":"down","steps":8,"at":{"by_type":"Scroll"}}}`
+5. **Tier A 导航 / 等待 / Toast**（详见 **`docs/agent-plan-a.md`** §2.1）
+   - `{"back":{}}` — Nav 子页返回（**不是** `swipe RIGHT` 冒充返回）
+   - `{"home":{}}`、`{"wait":{"seconds":1.5}}`
+   - `{"wait_for":{"by_text":"钱包","timeout":10}}`、`{"assert_toast":{"text":"…","timeout":3}}`
+   - `{"stop_app":{"bundle":"com.example.app"}}`、`{"start_app":{"bundle":"com.example.app"}}`
+
+**禁止**使用 `{"action":{"name":"back"}}`（无效；应写 `{"back":{}}` 或 `{"action":{"type":"back"}}`）。
 
 翻译用户意图时：优先 **by_id**（稳定）；只有没有 id 时才用 **by_text** 或坐标。需要固定滚动语义时在步骤 JSON 中写明 **`swipe`/`scroll`**（勿依赖对话 Agent 猜测）；参见 **`docs/agent-loop.md`**「自然语言未约定手势时」对照原子循环纪律。
 

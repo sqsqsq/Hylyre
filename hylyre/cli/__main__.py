@@ -24,6 +24,7 @@ from hylyre.cli.commands import (
     spec_cmd,
     steps_cmd,
 )
+from hylyre.cli.tier_a_run_commands import register_tier_a_run_commands
 from hylyre.ui_dump_filter import DumpFilterSpec
 
 app = typer.Typer(
@@ -597,6 +598,9 @@ def run_start_app_step(
         wait_time=wait_time,
         session_file=session,
     )
+
+
+register_tier_a_run_commands(run_app)
 
 
 @app.command("screenshot")

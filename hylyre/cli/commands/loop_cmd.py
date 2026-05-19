@@ -368,6 +368,68 @@ def execute_run_scroll(
     return "ok"
 
 
+def execute_dispatch_planned_step(
+    *,
+    payload: dict[str, Any],
+    device_sn: str | None = None,
+    mock_port: int | None = None,
+    lyrebird_url: str | None = None,
+    session_file: Path | None = None,
+) -> str:
+    """Run any planned JSON step via ``dispatch_planned_step``."""
+    if session_file is not None:
+        _session_ipc(session_file, "run_step", {"payload": payload})
+        return "ok"
+
+    async def _go(agent: HylyreAgent) -> None:
+        from hylyre.api.step_dispatch import dispatch_planned_step
+
+        await dispatch_planned_step(agent, payload)
+
+    asyncio.run(
+        _with_hypium_agent(
+            device_sn=device_sn,
+            mock_port=mock_port,
+            lyrebird_url=lyrebird_url,
+            fn=_go,
+        )
+    )
+    return "ok"
+
+
+def run_planned_step_json(
+    *,
+    payload_json: str,
+    device_sn: str | None,
+    mock_port: int | None,
+    lyrebird_url: str | None,
+    session_file: Path | None = None,
+) -> None:
+    import typer
+
+    try:
+        payload = json.loads(payload_json)
+        if not isinstance(payload, dict):
+            raise ValueError("JSON root must be an object")
+        execute_dispatch_planned_step(
+            payload=payload,
+            device_sn=device_sn,
+            mock_port=mock_port,
+            lyrebird_url=lyrebird_url,
+            session_file=session_file,
+        )
+    except json.JSONDecodeError as e:
+        typer.secho(f"Invalid JSON: {e}", err=True)
+        raise typer.Exit(code=2) from e
+    except ImportError as e:
+        typer.secho(str(e), err=True)
+        raise typer.Exit(code=2) from e
+    except Exception as e:
+        typer.secho(str(e), err=True)
+        raise typer.Exit(code=1) from e
+    typer.echo("ok")
+
+
 def run_screenshot_out(
     *,
     device_sn: str | None,

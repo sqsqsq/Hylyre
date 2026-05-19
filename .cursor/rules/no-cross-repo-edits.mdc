@@ -1,0 +1,13 @@
+---
+description: 禁止在未切换工作区时修改其它 Git 仓库内的文件（与工作区全局规则一致）
+alwaysApply: true
+---
+
+# 禁止跨仓库修改代码
+
+当前工作区为 **Hylyre** 仓库。实现与提交 **仅限本仓库**（`hylyre/`、`docs/`、`tests/`、`.cursor/rules/` 等）。
+
+- **不要** 编辑并列路径下的其它项目（例如 `../SimulatedWalletForHmos/`、`../OtherApp/`），除非用户已将该目录设为工作区或书面授权跨仓写入。
+- 需要下游 framework / 业务仓改动时：在回复中说明目标仓库与路径，请用户切换工作区后再执行；本仓仅可更新与 Hylyre 相关的文档说明（如 vendor 集成指引），不代替 framework 实现。
+
+用户级全局规则见：`~/.cursor/rules/no-cross-repo-edits.mdc`。

@@ -1149,6 +1149,15 @@ def build_mcp():  # type: ignore[no-untyped-def]
     except Exception as e:
         _mcp_log(f"app_store_probe_failed {e}")
 
+    from hylyre.mcp.tier_a_tools import register_tier_a_mcp_tools
+
+    register_tier_a_mcp_tools(
+        mcp,
+        loop_cmd=loop_cmd,
+        _session_agent=_session_agent,
+        _call_logged_async=_call_logged_async,
+    )
+
     _mcp_log("build_mcp end")
     return mcp
 

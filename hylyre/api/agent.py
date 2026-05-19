@@ -6,6 +6,7 @@ import asyncio
 import time
 from typing import Any
 
+from hylyre.api.selectors import require_selector
 from hylyre.drivers.base import MockControllerBase, UiDriverBase, VlmClientBase
 from hylyre.ui_dump_hints import augment_ui_dump_payload
 
@@ -145,6 +146,35 @@ class HylyreAgent:
         elif t == "scroll":
             block = {k: v for k, v in act.items() if k != "type"}
             await self._apply_scroll_block(block)
+        elif t == "back":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_back_block(block)
+        elif t == "home":
+            await self._apply_home_block({})
+        elif t == "stop_app":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_stop_app_block(block)
+        elif t == "clear_app":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_clear_app_block(block)
+        elif t == "wait":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_wait_block(block)
+        elif t == "wait_for":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_wait_for_block(block)
+        elif t == "wait_gone":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_wait_gone_block(block)
+        elif t == "wait_idle":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_wait_idle_block(block)
+        elif t == "assert_toast":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_assert_toast_block(block)
+        elif t == "start_app":
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_start_app_block(block)
         else:
             raise ValueError(f"Unsupported action type: {t!r}")
 
@@ -374,6 +404,157 @@ class HylyreAgent:
         if not isinstance(block, dict):
             raise ValueError(f"planned scroll payload missing scroll dict: {payload!r}")
         await self._apply_scroll_block(block)
+
+    async def _apply_back_block(self, block: dict[str, Any]) -> None:
+        await self._ui.press_back(
+            times=int(block.get("times", 1)),
+            mode=str(block.get("mode", "key")),
+            side=str(block.get("side", "RIGHT")),
+            height=float(block.get("height", 0.5)),
+        )
+
+    async def _apply_home_block(self, block: dict[str, Any]) -> None:
+        _ = block
+        await self._ui.press_home()
+
+    async def _apply_stop_app_block(self, block: dict[str, Any]) -> None:
+        bundle = block.get("bundle")
+        if not bundle:
+            raise ValueError("stop_app requires bundle")
+        await self._ui.stop_app(
+            str(bundle),
+            wait_time=float(block.get("wait_time", 0.5)),
+        )
+
+    async def _apply_clear_app_block(self, block: dict[str, Any]) -> None:
+        bundle = block.get("bundle")
+        if not bundle:
+            raise ValueError("clear_app requires bundle")
+        await self._ui.clear_app_data(str(bundle))
+
+    async def _apply_wait_block(self, block: dict[str, Any]) -> None:
+        sec = block.get("seconds")
+        if sec is None:
+            raise ValueError("wait requires seconds")
+        await self._ui.wait_seconds(float(sec))
+
+    async def _apply_wait_for_block(self, block: dict[str, Any]) -> None:
+        sel = require_selector(block, step="wait_for")
+        await self._ui.wait_for_selector(
+            **sel,
+            timeout=float(block.get("timeout", 10.0)),
+        )
+
+    async def _apply_wait_gone_block(self, block: dict[str, Any]) -> None:
+        sel = require_selector(block, step="wait_gone")
+        await self._ui.wait_for_selector_gone(
+            **sel,
+            timeout=float(block.get("timeout", 10.0)),
+        )
+
+    async def _apply_wait_idle_block(self, block: dict[str, Any]) -> None:
+        await self._ui.wait_for_idle(
+            idle_time=float(block.get("idle_time", 0.7)),
+            timeout=float(block.get("timeout", 10.0)),
+        )
+
+    async def _apply_assert_toast_block(self, block: dict[str, Any]) -> None:
+        text = block.get("text")
+        if text is None:
+            raise ValueError("assert_toast requires text")
+        await self._ui.assert_toast(
+            str(text),
+            timeout=float(block.get("timeout", 3.0)),
+            fuzzy=str(block.get("fuzzy", "equal")),
+        )
+
+    async def _apply_start_app_block(self, block: dict[str, Any]) -> None:
+        bundle = block.get("bundle")
+        if not bundle:
+            raise ValueError("start_app requires bundle")
+        await self._ui.start_app(
+            str(bundle),
+            page_name=block.get("page_name"),
+            params=str(block.get("params") or ""),
+            wait_time=float(block.get("wait_time", 1.0)),
+        )
+
+    async def run_planned_back(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("back")
+        if block is None:
+            block = {}
+        if not isinstance(block, dict):
+            raise ValueError(f"planned back payload must be object: {payload!r}")
+        await self._apply_back_block(block)
+
+    async def run_planned_home(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("home")
+        if block is None:
+            block = {}
+        if not isinstance(block, dict):
+            raise ValueError(f"planned home payload must be object: {payload!r}")
+        await self._apply_home_block(block)
+
+    async def run_planned_stop_app(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("stop_app")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned stop_app missing dict: {payload!r}")
+        await self._apply_stop_app_block(block)
+
+    async def run_planned_clear_app(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("clear_app")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned clear_app missing dict: {payload!r}")
+        await self._apply_clear_app_block(block)
+
+    async def run_planned_wait(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("wait")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned wait missing dict: {payload!r}")
+        await self._apply_wait_block(block)
+
+    async def run_planned_wait_for(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("wait_for")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned wait_for missing dict: {payload!r}")
+        await self._apply_wait_for_block(block)
+
+    async def run_planned_wait_gone(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("wait_gone")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned wait_gone missing dict: {payload!r}")
+        await self._apply_wait_gone_block(block)
+
+    async def run_planned_wait_idle(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("wait_idle")
+        if block is None:
+            block = {}
+        if not isinstance(block, dict):
+            raise ValueError(f"planned wait_idle must be object: {payload!r}")
+        await self._apply_wait_idle_block(block)
+
+    async def run_planned_assert_toast(self, payload: dict[str, Any]) -> None:
+        await self._ensure_ui()
+        block = payload.get("assert_toast")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned assert_toast missing dict: {payload!r}")
+        await self._apply_assert_toast_block(block)
+
+    async def run_planned_start_app_step(self, payload: dict[str, Any]) -> None:
+        """Planned JSON ``start_app`` root (distinct from runner-level ``--bundle``)."""
+        await self._ensure_ui()
+        block = payload.get("start_app")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned start_app missing dict: {payload!r}")
+        await self._apply_start_app_block(block)
 
     async def ai_tap(
         self,

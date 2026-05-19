@@ -32,6 +32,18 @@
 | `input` | 输入 schema | `{"input":{"text":"hello","by_id":"field","by_text":null}}` |
 | `swipe` | 方向滑动手势（Hypium `swipe`）；**半屏模态内需带 `area` 限定列表 `Scroll`**；竖向列表露出下方条目常用 **`UP`** | `{"swipe":{"direction":"UP","distance":55,"area":{"by_type":"Scroll"}}}` |
 | `scroll` | 纵向滚轮式滚动（Hypium `mouse_scroll`） | `{"scroll":{"direction":"down","steps":6}}` |
+| `back` | 系统 / Nav 栈返回（Hypium `press_back`；**不是**全屏 `swipe RIGHT`） | `{"back":{}}`、`{"back":{"times":2}}`、`{"back":{"mode":"swipe","side":"RIGHT"}}` |
+| `home` | Home 键 / 回桌面 | `{"home":{}}` |
+| `stop_app` | 结束应用进程（硬重置会话） | `{"stop_app":{"bundle":"com.example.app"}}` |
+| `clear_app` | 清除应用数据 | `{"clear_app":{"bundle":"com.example.app"}}` |
+| `wait` | 固定等待秒数 | `{"wait":{"seconds":1.5}}` |
+| `wait_for` | 等待控件出现 | `{"wait_for":{"by_text":"钱包","timeout":10}}` |
+| `wait_gone` | 等待控件消失 | `{"wait_gone":{"by_text":"加载中","timeout":10}}` |
+| `wait_idle` | 等待 UI 空闲 | `{"wait_idle":{"timeout":10}}` |
+| `assert_toast` | 断言 Toast 文案 | `{"assert_toast":{"text":"操作成功","timeout":3}}` |
+| `start_app` | 计划内重启应用（区别于 runner 级 `--bundle`） | `{"start_app":{"bundle":"com.example.app","page_name":"EntryAbility"}}` |
+
+`action.type` 除 `touch` / `input` / `swipe` / `scroll` 外，还支持上表 Tier A 类型名（如 `{"action":{"type":"back"}}`）。
 
 `action.type` 为 `touch` 时还可带 `wait_time`（可选）。
 

@@ -32,11 +32,15 @@ Framework / CI 请固定 **`--store-dir`** 或 **`HYLYRE_APP_STORE_DIR`**，与 
    `hylyre screenshot --out shot.jpeg`（可加 **`--session`**）
 3. **原子步骤**（单行 planned JSON）：  
    `hylyre run action --json "{\"action\":{\"type\":\"touch\",\"by_text\":\"登录\"}}"`  
-   或 `hylyre run tap` / `hylyre run input`（根键分别为 `touch` / `input`）、**`hylyre run swipe`** / **`hylyre run scroll`**（根键分别为 `swipe` / `scroll`，见下文）。上述命令均支持 **`--session`**。
+   或 `hylyre run tap` / `hylyre run input`（根键分别为 `touch` / `input`）、**`hylyre run swipe`** / **`hylyre run scroll`**（根键分别为 `swipe` / `scroll`，见下文）。  
+   **Tier A（导航 / 等待 / Toast）**：**`hylyre run back`** / **`home`** / **`stop-app`** / **`clear-app`** / **`wait`** / **`wait-for`** / **`wait-gone`** / **`wait-idle`** / **`assert-toast`** / **`start-app-step`**（各需 **`--json`**，schema 见 [做法 A §2.1](./agent-plan-a.md)）。上述命令均支持 **`--session`**。
 3b. **批量步骤**（同一会话一条进程跑多步）：  
    `hylyre run --steps-file nav.json --session …`（或 **`--steps '[ … ]'`**），可选 **`--on-fail abort|skip`**；与 **`--plan` 互斥**。可选 **`--bundle`/`--page-name`/`--wait-time`**：在步骤前先 **`start_app`**。输出结构化 JSON（stdout；或 **`--out` / `-o`** 写文件）。不落 `test-report.md`/`trace.json` —— 仍需 CI / Skill 6 时请用 **`run --plan`**。
-4. **启动应用**（可选）：  
-   `hylyre run start-app --bundle com.example.app`（支持 **`--session`**；一次性会话需在 `session start` 时传入相同的 `--mock-port` / `--lyrebird-url`）
+4. **启动应用**（可选，三种方式勿混用）：  
+   - **Runner 级冷启**（整份 `--plan` 开始前一次）：`hylyre run --plan … --bundle com.example.app`  
+   - **原子 CLI**（无 JSON 信封）：`hylyre run start-app --bundle com.example.app`（支持 **`--session`**）  
+   - **计划内一步**（与其它 JSON 步骤并列）：`hylyre run start-app-step --json '{"start_app":{"bundle":"com.example.app"}}'`  
+   一次性会话需在 `session start` 时传入相同的 `--mock-port` / `--lyrebird-url`。
 5. **增量报告**（草稿 trace → 最终报告）：  
 
 ```bash
@@ -54,7 +58,9 @@ hylyre report verify --report report.md --trace trace.json
 ### MCP 典型循环（与上等价）
 
 - `hylyre_dump_ui` / `hylyre_screenshot`（可选 `session_id`）
-- `hylyre_run_action` / `hylyre_run_tap` / `hylyre_run_input` / **`hylyre_run_swipe`** / **`hylyre_run_scroll`** / `hylyre_start_app`
+- `hylyre_run_action` / `hylyre_run_tap` / `hylyre_run_input` / **`hylyre_run_swipe`** / **`hylyre_run_scroll`**
+- **Tier A**：**`hylyre_run_back`** / **`hylyre_run_home`** / **`hylyre_run_stop_app`** / **`hylyre_run_clear_app`** / **`hylyre_run_wait`** / **`hylyre_run_wait_for`** / **`hylyre_run_wait_gone`** / **`hylyre_run_wait_idle`** / **`hylyre_run_assert_toast`** / **`hylyre_run_start_app_step`**（payload 根键与 [做法 A](./agent-plan-a.md) 一致）
+- **`hylyre_start_app`**：原子启动（CLI 旗标式，非 planned JSON 根键）
 - **`hylyre_run_steps`**：一次传入 `steps` 数组（与单步相同根键），减少 MCP 往返；或 CLI **`run --steps-file`**
 - **`hylyre_collect_list`**：在半屏列表里滚到底并合并所有可见 **`Text`** 行（可选正则过滤）；等价 CLI：`hylyre collect-list`
 - **`hylyre_find`**：当前屏控件树扁平查找；返回 **`hits`** + 根级 **`_hylyre_hints`**（与 `dump-ui` 同源滚动信号），便于不走整树 dump 时仍能判断是否该转 **`collect-list`**。
@@ -105,6 +111,26 @@ hylyre report verify --report report.md --trace trace.json
 **半屏 Bottom Sheet**：进入后列表通常已在**顶端**，不要默认传 **`reset_to_top`** / **`bidirectional`**，否则易在半屏内反复 **DOWN** 触边回弹。若 **`_hylyre_hints`** 里目标 **`Scroll`** 无 **`likely_more_content_below`**，多表示当前视口已含列表全部可见项。
 
 **`--early-bounce-break`（默认开） / MCP `early_bounce_break`**：一次滑动后若下一帧 dump 的可见 **Text** 指纹与滑前相同（触边未滚动），立即结束该方向；需旧版「只靠连续 **`max_stable_rounds`** 轮无新行才停」时用 **`--no-early-bounce-break`**。
+
+## 导航 / 等待 / Toast（Tier A）
+
+Hypium 系统级能力与等待类步骤，根键与 [做法 A §2.1](./agent-plan-a.md) 一致；**`hylyre run --plan`** / **`hylyre_run_steps`** / MCP **`hylyre_run_*`** 均支持。
+
+| 能力 | CLI | MCP | 说明 |
+|------|-----|-----|------|
+| 系统 / Nav 返回 | `hylyre run back --json '{"back":{}}'` | `hylyre_run_back` | **Nav 子页 pop 优先用 `back`**，不要用全屏 **`swipe RIGHT`** 冒充返回。可选 **`times`**、**`mode":"swipe"`**（边缘滑）。 |
+| Home 键 | `hylyre run home --json '{"home":{}}'` | `hylyre_run_home` | 回桌面 / 宿主 |
+| 结束进程 | `hylyre run stop-app --json '{"stop_app":{"bundle":"…"}}'` | `hylyre_run_stop_app` | 硬重置会话 |
+| 清应用数据 | `hylyre run clear-app --json '{"clear_app":{"bundle":"…"}}'` | `hylyre_run_clear_app` | 冷态数据 |
+| 固定等待 | `hylyre run wait --json '{"wait":{"seconds":1.5}}'` | `hylyre_run_wait` | 秒数 |
+| 等元素出现 | `hylyre run wait-for --json '{"wait_for":{"by_text":"…","timeout":10}}'` | `hylyre_run_wait_for` | 四选一 selector |
+| 等元素消失 | `hylyre run wait-gone --json '{"wait_gone":{"by_text":"…"}}'` | `hylyre_run_wait_gone` | 同上 |
+| 等 UI 空闲 | `hylyre run wait-idle --json '{"wait_idle":{"timeout":10}}'` | `hylyre_run_wait_idle` | Hypium `wait_for_idle` |
+| 断言 Toast | `hylyre run assert-toast --json '{"assert_toast":{"text":"…"}}'` | `hylyre_run_assert_toast` | 无 VLM 时常用于轻量反馈用例 |
+
+**典型 Nav 循环**（进子页后回 Tab）：`dump-ui` → 确认在子页 → **`{"back":{}}`** → 再 `dump-ui` / **`find`** 确认 Tab 文案（如「首页」）出现 → 继续 **`touch`**。
+
+**禁止**在 test-plan 中使用 **`{"action":{"name":"back"}}`**；应写 **`{"back":{}}`** 或 **`{"action":{"type":"back"}}`**。
 
 ## 列表与滚屏（`swipe` / `scroll`）
 

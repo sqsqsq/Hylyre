@@ -395,6 +395,157 @@ class HypiumDriver(UiDriverBase):
 
         await _to_thread(_go)
 
+    async def press_back(
+        self,
+        *,
+        times: int = 1,
+        mode: str = "key",
+        side: str = "RIGHT",
+        height: float = 0.5,
+    ) -> None:
+        await self._require_raw()
+        raw = self._raw
+        t = max(1, int(times))
+        mode_l = str(mode).strip().lower()
+        side_s = str(side).strip().upper()
+        h = float(height)
+
+        def _once_key() -> None:
+            fn = getattr(raw, "press_back", None) or getattr(raw, "go_back", None)
+            if fn is None:
+                raise RuntimeError("Hypium UiDriver has no press_back/go_back")
+            fn()
+
+        def _once_swipe() -> None:
+            raw.swipe_to_back(side=side_s, times=1, height=h)
+
+        for _ in range(t):
+            if mode_l == "swipe":
+                await _to_thread(_once_swipe)
+            elif mode_l in ("key", "normal", ""):
+                await _to_thread(_once_key)
+            else:
+                raise ValueError(
+                    "press_back mode must be 'key' or 'swipe' "
+                    f"(got {mode!r})"
+                )
+
+    async def press_home(self) -> None:
+        await self._require_raw()
+        raw = self._raw
+
+        def _go() -> None:
+            fn = getattr(raw, "press_home", None) or getattr(raw, "go_home", None)
+            if fn is None:
+                raise RuntimeError("Hypium UiDriver has no press_home/go_home")
+            fn()
+
+        await _to_thread(_go)
+
+    async def stop_app(self, bundle: str, *, wait_time: float = 0.5) -> None:
+        await self._require_raw()
+        raw = self._raw
+        pkg = str(bundle)
+        wt = float(wait_time)
+        await _to_thread(lambda: raw.stop_app(pkg, wt))
+
+    async def clear_app_data(self, bundle: str) -> None:
+        await self._require_raw()
+        raw = self._raw
+        pkg = str(bundle)
+        await _to_thread(lambda: raw.clear_app_data(pkg))
+
+    async def wait_seconds(self, seconds: float) -> None:
+        await self._require_raw()
+        raw = self._raw
+        sec = float(seconds)
+        if sec < 0:
+            raise ValueError("wait seconds must be >= 0")
+        await _to_thread(lambda: raw.wait(sec))
+
+    async def wait_for_selector(
+        self,
+        *,
+        by_text: str | None = None,
+        by_id: str | None = None,
+        by_type: str | None = None,
+        by_key: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
+        await self._require_raw()
+        shim = load_hypium_shim()
+        raw = self._raw
+        sel = _hypium_single_selector(
+            shim,
+            by_text=by_text,
+            by_id=by_id,
+            by_type=by_type,
+            by_key=by_key,
+        )
+        if sel is None:
+            raise ValueError(
+                "wait_for_selector requires one of by_text, by_id, by_type, by_key"
+            )
+        to = float(timeout)
+        await _to_thread(lambda: raw.wait_for_component(sel, to))
+
+    async def wait_for_selector_gone(
+        self,
+        *,
+        by_text: str | None = None,
+        by_id: str | None = None,
+        by_type: str | None = None,
+        by_key: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
+        await self._require_raw()
+        shim = load_hypium_shim()
+        raw = self._raw
+        sel = _hypium_single_selector(
+            shim,
+            by_text=by_text,
+            by_id=by_id,
+            by_type=by_type,
+            by_key=by_key,
+        )
+        if sel is None:
+            raise ValueError(
+                "wait_for_selector_gone requires one of "
+                "by_text, by_id, by_type, by_key"
+            )
+        to = float(timeout)
+        await _to_thread(lambda: raw.wait_for_component_disappear(sel, to))
+
+    async def wait_for_idle(
+        self,
+        *,
+        idle_time: float = 0.7,
+        timeout: float = 10.0,
+    ) -> None:
+        await self._require_raw()
+        raw = self._raw
+        idle = float(idle_time)
+        to = float(timeout)
+        await _to_thread(lambda: raw.wait_for_idle(idle, to))
+
+    async def assert_toast(
+        self,
+        text: str,
+        *,
+        timeout: float = 3.0,
+        fuzzy: str = "equal",
+    ) -> None:
+        await self._require_raw()
+        raw = self._raw
+        expect = str(text)
+        to = int(timeout)
+        fz = str(fuzzy)
+
+        def _go() -> None:
+            raw.check_toast(expect, fz, to)
+
+        await _to_thread(_go)
+
     async def install_app(self, hap_path: str | Path, **kwargs: Any) -> None:
         """Install a .hap from the host via Hypium (uses hdc under the hood)."""
         await self._require_raw()

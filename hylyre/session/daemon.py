@@ -53,6 +53,11 @@ async def _dispatch(agent: HylyreAgent, method: str, params: dict[str, Any]) -> 
     if method == "run_scroll":
         await agent.run_planned_scroll(dict(params["payload"]))
         return "ok"
+    if method == "run_step":
+        from hylyre.api.step_dispatch import dispatch_planned_step
+
+        await dispatch_planned_step(agent, dict(params["payload"]))
+        return "ok"
     if method == "run_steps":
         from hylyre.cli.commands import steps_cmd as _steps_cmd
 

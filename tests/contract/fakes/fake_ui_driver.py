@@ -177,3 +177,108 @@ class FakeUiDriver(UiDriverBase):
                 },
             )
         )
+
+    async def press_back(
+        self,
+        *,
+        times: int = 1,
+        mode: str = "key",
+        side: str = "RIGHT",
+        height: float = 0.5,
+    ) -> None:
+        self.events.append(
+            (
+                "press_back",
+                {
+                    "times": times,
+                    "mode": mode,
+                    "side": side,
+                    "height": height,
+                },
+            )
+        )
+
+    async def press_home(self) -> None:
+        self.events.append(("press_home", {}))
+
+    async def stop_app(self, bundle: str, *, wait_time: float = 0.5) -> None:
+        self.events.append(
+            ("stop_app", {"bundle": bundle, "wait_time": wait_time})
+        )
+
+    async def clear_app_data(self, bundle: str) -> None:
+        self.events.append(("clear_app_data", {"bundle": bundle}))
+
+    async def wait_seconds(self, seconds: float) -> None:
+        self.events.append(("wait_seconds", {"seconds": seconds}))
+
+    async def wait_for_selector(
+        self,
+        *,
+        by_text: str | None = None,
+        by_id: str | None = None,
+        by_type: str | None = None,
+        by_key: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
+        self.events.append(
+            (
+                "wait_for_selector",
+                {
+                    "by_text": by_text,
+                    "by_id": by_id,
+                    "by_type": by_type,
+                    "by_key": by_key,
+                    "timeout": timeout,
+                },
+            )
+        )
+
+    async def wait_for_selector_gone(
+        self,
+        *,
+        by_text: str | None = None,
+        by_id: str | None = None,
+        by_type: str | None = None,
+        by_key: str | None = None,
+        timeout: float = 10.0,
+    ) -> None:
+        self.events.append(
+            (
+                "wait_for_selector_gone",
+                {
+                    "by_text": by_text,
+                    "by_id": by_id,
+                    "by_type": by_type,
+                    "by_key": by_key,
+                    "timeout": timeout,
+                },
+            )
+        )
+
+    async def wait_for_idle(
+        self,
+        *,
+        idle_time: float = 0.7,
+        timeout: float = 10.0,
+    ) -> None:
+        self.events.append(
+            (
+                "wait_for_idle",
+                {"idle_time": idle_time, "timeout": timeout},
+            )
+        )
+
+    async def assert_toast(
+        self,
+        text: str,
+        *,
+        timeout: float = 3.0,
+        fuzzy: str = "equal",
+    ) -> None:
+        self.events.append(
+            (
+                "assert_toast",
+                {"text": text, "timeout": timeout, "fuzzy": fuzzy},
+            )
+        )
