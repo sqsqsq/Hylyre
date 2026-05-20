@@ -14,18 +14,18 @@ alwaysApply: false
 - 表头 7 列顺序：`用例编号 | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 优先级 | 关联 AC`。
 - 同一单元格内多步：用 **`;` 或 `；`** 分隔多条 JSON，不要用 `<br/>`。
 - 全表避免出现会破坏表格的 **`|`**（尤其步骤列 JSON 内的字符串）。
+- **不要**用 markdown 反引号包裹步骤 JSON；直接写裸 JSON。
+- **不要**用 CLI 名（`tap`/`swipe`）作 JSON 根键。
 
-## 步骤 JSON（根键唯一；任选其一）
+## 步骤 JSON（根键唯一；推荐 direct，action 可选）
 
-1. **action**（与 `run_planned_action` 一致）
-   - `{"action":{"type":"touch","by_text":"登录"}}`
-   - `{"action":{"type":"touch","by_id":"btn_ok","wait_time":0.2}}`
-   - `{"action":{"type":"input","text":"100","by_id":"amount"}}`
-   - `{"action":{"type":"swipe","direction":"UP","distance":55,"area":{"by_type":"Scroll"}}}`、`{"action":{"type":"scroll","direction":"down","steps":5,"at":{"by_type":"Scroll"}}}`
-2. **touch**（与 `run_planned_tap` 一致）
+1. **touch**（推荐，与 `run_planned_tap` 一致）
    - `{"touch":{"by_text":"充值"}}` 或 `{"touch":{"x":10,"y":20}}`
-3. **input**（与 `run_planned_input` 一致）
+2. **input**（推荐）
    - `{"input":{"text":"hello","by_id":"field","by_text":null}}`
+3. **action**（可选信封，与 `run_planned_action` 一致）
+   - `{"action":{"type":"touch","by_text":"登录"}}`
+   - `{"action":{"type":"swipe","direction":"UP","distance":55,"area":{"by_type":"Scroll"}}}`
 4. **swipe** / **scroll**（与原子 CLI `run swipe` / `run scroll`、MCP `hylyre_run_swipe` / `hylyre_run_scroll` 一致；竖向列表、半屏模态见 **`docs/agent-loop.md`**）
    - `{"swipe":{"direction":"UP","distance":65,"area":{"by_type":"Scroll"}}}`
    - `{"scroll":{"direction":"down","steps":8,"at":{"by_type":"Scroll"}}}`

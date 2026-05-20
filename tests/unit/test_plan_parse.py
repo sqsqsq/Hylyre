@@ -23,12 +23,15 @@ def test_parse_mock_fixture() -> None:
 
 def test_parse_json_steps_fixture() -> None:
     parsed = parse_test_plan(JSON_STEPS_FIXTURE)
-    assert len(parsed.cases) == 1
+    assert len(parsed.cases) == 2
     c0 = parsed.cases[0]
     assert c0.case_id == "TC-JSON-01"
     assert '{"action":' in c0.steps
     assert '{"input":' in c0.steps
     assert ";" in c0.steps or "；" in c0.steps
+    c1 = parsed.cases[1]
+    assert c1.case_id == "TC-JSON-02"
+    assert '{"back":' in c1.steps
 
 
 def test_parse_rejects_missing_table(tmp_path: Path) -> None:

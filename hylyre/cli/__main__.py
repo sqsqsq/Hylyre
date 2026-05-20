@@ -223,12 +223,12 @@ def run_plan_batch(
     page_name: Optional[str] = typer.Option(
         None,
         "--page-name",
-        help="Hypium ability name — used with --bundle when batching steps.",
+        help="Hypium ability name — used with --bundle on plan or steps batch.",
     ),
     start_wait_time: float = typer.Option(
         1.0,
         "--wait-time",
-        help="start_app wait (seconds; only with --bundle on steps batch).",
+        help="start_app wait (seconds) when --bundle is set (plan or steps batch).",
     ),
     feature: Optional[str] = typer.Option(
         None,
@@ -317,6 +317,55 @@ def run_plan_batch(
         except Exception as e:
             typer.secho(f"Invalid steps JSON: {e}", err=True)
             raise typer.Exit(2)
+        wants_report = (
+            feature is not None or report_out is not None or trace_out is not None
+        )
+        if wants_report:
+            need = []
+            if feature is None:
+                need.append("--feature")
+            if report_out is None:
+                need.append("--report-out")
+            if trace_out is None:
+                need.append("--trace-out")
+            if need:
+                typer.secho(
+                    f"Steps report mode requires: {', '.join(need)}",
+                    err=True,
+                )
+                raise typer.Exit(2)
+            steps_path = (
+                Path(steps_file)
+                if steps_file is not None
+                else Path("<inline-steps>")
+            )
+            try:
+                msg, synth = run_cmd.execute_steps_scenario(
+                    steps_path=steps_path,
+                    steps=step_list,
+                    feature=feature,
+                    report_out=report_out,
+                    trace_out=trace_out,
+                    device_sn=device_sn,
+                    bundle=bundle,
+                    page_name=page_name,
+                    wait_time=start_wait_time,
+                    mock_port=mock_port,
+                    lyrebird_url=lyrebird_url,
+                    session_file=session,
+                    on_fail=on_fail,
+                    model_backend=model_backend,
+                )
+            except ValueError as exc:
+                typer.secho(f"verify_report failed: {exc}", err=True)
+                raise typer.Exit(1) from exc
+            except Exception as e:
+                typer.secho(str(e), err=True)
+                raise typer.Exit(1) from e
+            typer.echo(msg)
+            from hylyre.scenario.runner import resolved_outcome
+
+            raise typer.Exit(0 if resolved_outcome(synth) == "success" else 1)
         try:
             result_dict = steps_cmd.execute_run_steps(
                 step_list,
@@ -367,6 +416,8 @@ def run_plan_batch(
         use_fakes=use_fakes,
         device_sn=device_sn,
         bundle=bundle,
+        page_name=page_name,
+        wait_time=start_wait_time,
         mock_port=mock_port,
         lyrebird_url=lyrebird_url,
         mock_group=mock_group,

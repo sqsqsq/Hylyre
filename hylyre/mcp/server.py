@@ -144,6 +144,8 @@ def build_mcp():  # type: ignore[no-untyped-def]
         use_fakes: bool = False,
         device_sn: str | None = None,
         bundle: str | None = None,
+        page_name: str | None = None,
+        wait_time: float = 1.0,
         mock_port: int | None = None,
         lyrebird_url: str | None = None,
         mock_group: str | None = None,
@@ -159,6 +161,8 @@ def build_mcp():  # type: ignore[no-untyped-def]
                 use_fakes=use_fakes,
                 device_sn=device_sn,
                 bundle=bundle,
+                page_name=page_name,
+                wait_time=wait_time,
                 mock_port=mock_port,
                 lyrebird_url=lyrebird_url,
                 mock_group=mock_group,
@@ -545,10 +549,43 @@ def build_mcp():  # type: ignore[no-untyped-def]
         page_name: str | None = None,
         wait_time: float = 1.0,
         params: str = "",
+        feature: str | None = None,
+        report_out: str | None = None,
+        trace_out: str | None = None,
+        steps_path: str | None = None,
+        model_backend: str | None = None,
     ) -> str:
         from hylyre.cli.commands import steps_cmd
 
         async def _run() -> str:
+            if feature or report_out or trace_out:
+                if not (feature and report_out and trace_out):
+                    raise ValueError(
+                        "report mode requires feature, report_out, and trace_out"
+                    )
+                sp = Path(steps_path) if steps_path else Path("<mcp-steps>")
+                import anyio
+
+                msg, _ = await anyio.to_thread.run_sync(
+                    lambda: run_cmd.execute_steps_scenario(
+                        steps_path=sp,
+                        steps=[dict(x) for x in steps],
+                        feature=feature,
+                        report_out=Path(report_out),
+                        trace_out=Path(trace_out),
+                        device_sn=device_sn,
+                        bundle=bundle,
+                        page_name=page_name,
+                        wait_time=wait_time,
+                        params=params,
+                        mock_port=mock_port,
+                        lyrebird_url=lyrebird_url,
+                        session_file=Path(session_path) if session_path else None,
+                        on_fail=on_fail,
+                        model_backend=model_backend,
+                    )
+                )
+                return msg
             modes = sum(bool(x) for x in (session_id, session_path, device_sn))
             if modes != 1:
                 raise ValueError(

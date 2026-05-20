@@ -39,6 +39,13 @@ Hypium 原子 CLI 默认每条命令完整 **connect/disconnect**，耗时常被
 
 Framework 子进程请固定 **`--store-dir`**；Cursor MCP 默认可用仓库下 **`.hylyre/apps`**。详见 **[app-knowledge.md](./app-knowledge.md)**、**[agent-loop.md](./agent-loop.md)**「Knowledge-first loop」。
 
+## Framework 集成注意（Skill 6 子进程）
+
+- **test-plan 步骤列**：只写裸 JSON（`{"touch":…}`）；不要用 markdown 反引号包裹，否则无 VLM 时会被当成自然语言步骤。解析器会剥离常见反引号/围栏，但生成计划时应避免。
+- **冷启 Ability**：`hylyre run --plan …` 与 `hylyre run --steps-file …` 均支持 `--bundle` + `--page-name`（如 `MainAbility`），与 steps 批量路径一致。
+- **adhoc 步骤 + 报告**：`hylyre run --steps-file nav.json --feature … --report-out … --trace-out …` 产出与 `--plan` 同 schema 的 `trace.json`（`cases[]` 为 `STEP-000` …），便于 Framework 统一合成。
+- 步骤 JSON 规约：**[agent-plan-a.md](./agent-plan-a.md)**（推荐 direct 根键 `touch`/`input`/…，`action` 为可选信封）。
+
 ## 文档索引
 
 - 原子循环总览：**[agent-loop.md](./agent-loop.md)**（session、`collect-list`、`_hylyre_hints`、半屏 `swipe.area` 纪律）

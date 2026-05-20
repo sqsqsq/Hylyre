@@ -11,6 +11,21 @@ from hylyre.drivers.base import MockControllerBase, UiDriverBase, VlmClientBase
 from hylyre.ui_dump_hints import augment_ui_dump_payload
 
 
+def _start_app_failure_hint(bundle: str, page_name: str | None) -> str:
+    parts = [
+        f"original error above; bundle={bundle!r}",
+    ]
+    if not page_name:
+        parts.append(
+            "try --page-name <Ability> or "
+            '{"start_app":{"bundle":"…","page_name":"…"}} in the plan'
+        )
+    parts.append(
+        f"or pre-start: hdc shell aa start -a <Ability> -b {bundle}"
+    )
+    return " ".join(parts)
+
+
 class HylyreAgent:
     """High-level facade: uses only ``UiDriverBase`` / ``MockControllerBase`` / ``VlmClientBase``."""
 
@@ -70,9 +85,14 @@ class HylyreAgent:
         wait_time: float = 1.0,
     ) -> None:
         await self._ensure_ui()
-        await self._ui.start_app(
-            bundle, page_name=page_name, params=params, wait_time=wait_time
-        )
+        try:
+            await self._ui.start_app(
+                bundle, page_name=page_name, params=params, wait_time=wait_time
+            )
+        except Exception as e:
+            hint = _start_app_failure_hint(bundle, page_name)
+            raise RuntimeError(f"start_app failed for {bundle!r}: {hint}") from e
+
 
     async def dump_ui(self) -> dict[str, Any]:
         """Return structured UI tree for external agents (no VLM)."""

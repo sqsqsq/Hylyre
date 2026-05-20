@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,12 @@ from typing import Any
 from hylyre.api.agent import HylyreAgent
 from hylyre.api.step_dispatch import dispatch_planned_step
 from hylyre.scenario.plan_parse import ParsedPlan, TestCase, parse_test_plan
+from hylyre.scenario.step_text import (
+    json_step_syntax_error,
+    looks_like_planned_json,
+    non_json_step_error,
+    normalize_planned_step_text,
+)
 
 
 @dataclass(frozen=True)
@@ -77,6 +82,9 @@ class ScenarioRunner:
         *,
         feature: str,
         bundle: str | None = None,
+        page_name: str | None = None,
+        wait_time: float = 1.0,
+        params: str = "",
         mock_group: str | None = None,
         check_expected: bool = True,
     ) -> ScenarioRunResult:
@@ -89,8 +97,16 @@ class ScenarioRunner:
             await agent.mock_activate_group(mock_group)
             tool_log.append({"kind": "mock_activate_group", "group": mock_group})
         if bundle:
-            await agent.start_app(bundle)
-            tool_log.append({"kind": "start_app", "bundle": bundle})
+            await agent.start_app(
+                bundle,
+                page_name=page_name,
+                params=params or "",
+                wait_time=wait_time,
+            )
+            entry: dict[str, Any] = {"kind": "start_app", "bundle": bundle}
+            if page_name:
+                entry["page_name"] = page_name
+            tool_log.append(entry)
         results: list[CaseResult] = []
         for case in plan.cases:
             try:
@@ -155,28 +171,24 @@ def _iter_steps(text: str) -> list[str]:
     return [ln.strip() for ln in normalized.splitlines() if ln.strip()]
 
 
-_JSONISH = re.compile(r"^\s*\{.*\}\s*$", re.DOTALL)
-
-
 async def _execute_one_step(
     agent: HylyreAgent,
     case_id: str,
     step: str,
     tool_log: list[dict[str, Any]],
 ) -> None:
-    s = step.strip()
+    s = normalize_planned_step_text(step)
     if not s:
         return
-    if _JSONISH.match(s):
-        payload = json.loads(s)
+    if looks_like_planned_json(step):
+        try:
+            payload = json.loads(s)
+        except json.JSONDecodeError as e:
+            raise ValueError(json_step_syntax_error(case_id, e, step)) from e
         await dispatch_planned_step(agent, payload, case_id=case_id)
         tool_log.append({"case": case_id, "kind": "planned_json", "payload": payload})
         return
     if agent.vlm is None:
-        raise ValueError(
-            f"{case_id}: 非 JSON 的测试步骤需要配置 VLM（HYLYRE_VLM_ENDPOINT 等）"
-            f"，或在计划中使用单行 JSON：`"
-            f'{{"action":{{"type":"touch","by_text":"…"}}}}`'
-        )
+        raise ValueError(non_json_step_error(case_id))
     await agent.ai_action(s)
     tool_log.append({"case": case_id, "kind": "ai_action", "instruction": s[:500]})

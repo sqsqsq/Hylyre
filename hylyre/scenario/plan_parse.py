@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from hylyre.scenario.step_text import normalize_planned_step_text
+
 
 @dataclass(frozen=True)
 class TestCase:
@@ -82,5 +84,7 @@ def parse_test_plan(path: Path | str) -> ParsedPlan:
 
 def _split_row(line: str) -> list[str]:
     raw = line.strip().strip("|").split("|")
-    return [c.replace("<br/>", " ").strip() for c in raw]
+    return [
+        normalize_planned_step_text(c.replace("<br/>", " ").strip()) for c in raw
+    ]
 

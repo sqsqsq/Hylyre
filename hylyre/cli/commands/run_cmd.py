@@ -14,6 +14,7 @@ from hylyre.harness.runner import verify_report
 from hylyre.report.emit import write_run_artifacts
 from hylyre.scenario.plan_parse import ParsedPlan, TestCase
 from hylyre.scenario.runner import CaseResult, ScenarioRunResult, ScenarioRunner
+from hylyre.scenario.steps_report import steps_batch_to_scenario_result
 
 TRACE_DRAFT_SCHEMA = "0.1-p0"
 
@@ -48,6 +49,9 @@ def execute_scenario(
     use_fakes: bool,
     device_sn: str | None = None,
     bundle: str | None = None,
+    page_name: str | None = None,
+    wait_time: float = 1.0,
+    params: str = "",
     mock_port: int | None = None,
     lyrebird_url: str | None = None,
     mock_group: str | None = None,
@@ -69,6 +73,9 @@ def execute_scenario(
                 feature=feature,
                 device_sn=device_sn,
                 bundle=bundle,
+                page_name=page_name,
+                wait_time=wait_time,
+                params=params,
                 mock_port=mock_port,
                 lyrebird_url=lyrebird_url,
                 mock_group=mock_group,
@@ -83,6 +90,62 @@ def execute_scenario(
         )
     verify_report(report_out, trace_out, plan)
     return f"Wrote {report_out} and {trace_out}"
+
+
+def execute_steps_scenario(
+    *,
+    steps_path: Path,
+    steps: list[dict[str, Any]],
+    feature: str,
+    report_out: Path,
+    trace_out: Path,
+    device_sn: str | None = None,
+    bundle: str | None = None,
+    page_name: str | None = None,
+    wait_time: float = 1.0,
+    params: str = "",
+    mock_port: int | None = None,
+    lyrebird_url: str | None = None,
+    session_file: Path | None = None,
+    on_fail: str = "abort",
+    model_backend: str | None = None,
+) -> tuple[str, ScenarioRunResult]:
+    """Run steps-file batch, emit plan-compatible report + trace, L5 verify."""
+    from hylyre.cli.commands import steps_cmd
+
+    batch = steps_cmd.execute_run_steps(
+        steps,
+        device_sn=device_sn,
+        mock_port=mock_port,
+        lyrebird_url=lyrebird_url,
+        session_file=session_file,
+        on_fail=on_fail,
+        bundle=bundle,
+        page_name=page_name,
+        wait_time=wait_time,
+        params=params,
+    )
+    result = steps_batch_to_scenario_result(
+        feature=feature,
+        steps_path=steps_path,
+        batch=batch,
+        bundle=bundle,
+        page_name=page_name,
+    )
+    mb = resolve_model_backend(model_backend, use_fakes=False)
+    write_run_artifacts(
+        result,
+        report_path=report_out,
+        trace_path=trace_out,
+        model_backend=mb,
+    )
+    verify_plan = (
+        steps_path
+        if steps_path.is_file() and steps_path.suffix.lower() in (".md", ".markdown")
+        else None
+    )
+    verify_report(report_out, trace_out, verify_plan)
+    return f"Wrote {report_out} and {trace_out}", result
 
 
 def execute_report_begin(
@@ -227,6 +290,9 @@ def run_scenario(
     use_fakes: bool,
     device_sn: str | None = None,
     bundle: str | None = None,
+    page_name: str | None = None,
+    wait_time: float = 1.0,
+    params: str = "",
     mock_port: int | None = None,
     lyrebird_url: str | None = None,
     mock_group: str | None = None,
@@ -242,6 +308,9 @@ def run_scenario(
             use_fakes=use_fakes,
             device_sn=device_sn,
             bundle=bundle,
+            page_name=page_name,
+            wait_time=wait_time,
+            params=params,
             mock_port=mock_port,
             lyrebird_url=lyrebird_url,
             mock_group=mock_group,
@@ -260,6 +329,9 @@ async def _run_on_device(
     feature: str,
     device_sn: str | None,
     bundle: str | None,
+    page_name: str | None,
+    wait_time: float,
+    params: str,
     mock_port: int | None,
     lyrebird_url: str | None,
     mock_group: str | None,
@@ -279,6 +351,9 @@ async def _run_on_device(
             plan,
             feature=feature,
             bundle=bundle or None,
+            page_name=page_name,
+            wait_time=wait_time,
+            params=params,
             mock_group=mock_group or None,
             check_expected=not skip_assert_expected,
         )

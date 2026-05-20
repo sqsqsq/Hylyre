@@ -22,7 +22,7 @@
 - 校验：`hylyre report verify --report … --trace … [--plan …]`（ad-hoc 报告可省略 `--plan`）
 - 原子循环（节选）：`hylyre dump-ui`、`hylyre screenshot`、`hylyre find`（输出 **`hits` + `_hylyre_hints`**）、`hylyre app page …` / `hylyre app find`、`hylyre run action|tap|input|swipe|scroll|back|home|wait|assert-toast|…`。**若干已知步骤可一条命令跑**：`hylyre run --steps-file nav.json --session …`（或 MCP **`hylyre_run_steps`**），减少多次 `run tap`/MCP 往返。**多条 CLI 串联真机**时用 **`hylyre session start`** + 各命令 **`--session <.hylyre/session.json>`**，结束前 **`hylyre session stop`**。**枚举半屏长列表**：`hylyre collect-list`（可选 **`--reset-to-top` / `--bidirectional`**；MCP **`hylyre_collect_list`**）。**半屏浮层里滚动列表**须在 **`swipe.area` / `scroll.at`**（常用 **`by_type: Scroll`**）内操作，或使用 **`run swipe --area-by-type Scroll`** / **`run scroll --at-by-type Scroll`**，避免全屏下滑关掉 Sheet（详见 [`docs/agent-loop.md`](docs/agent-loop.md)）。
 - 增量报告：`hylyre report begin` → `hylyre report record` → `hylyre report finalize`
-- 真机：去掉 `--use-fakes`，安装 `hylyre[device]`，按需 `--device-sn`、`--bundle`、`--skip-assert-expected`（JSON 步骤 + 无 VLM 时常用）。
+- 真机：去掉 `--use-fakes`，安装 `hylyre[device]`，按需 `--device-sn`、`--bundle`、`--page-name`、`--wait-time`、`--skip-assert-expected`（JSON 步骤 + 无 VLM 时常用）。`run --steps-file` 也可加 `--feature`/`--report-out`/`--trace-out` 产出与 plan 同 schema 报告。
 
 ## 不要做的
 

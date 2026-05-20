@@ -22,13 +22,18 @@
 - **多条**步骤可在同一单元格里用 **英文分号 `;` 或中文分号 `；`** 分隔，解析器会先换成换行再逐条执行（见 `_iter_steps`）。
 - 不要使用 `<br/>` 拆步骤：解析时 `<br/>` 会被替换成空格，多段 JSON 会粘在一起。
 - **避免** 在任意列里出现未转义的 **竖线 `|`**：表格按 `|` 切列，会破坏 7 列对齐。JSON 里的文案若含 `|`，改用别表述或 `by_id`。
+- **禁止** 用 markdown **反引号** 或 ` ``` ` 围栏包裹 JSON（如 `` `{"touch":…}` ``）；解析器会尽量剥离，但表格中应直接写裸 JSON。
+- **禁止** 把 CLI 子命令名（`tap`、`swipe` 等）当作 JSON 根键；根键必须是下表中的 planned 键名。
+
+**推荐写法（canonical direct 根键）**：优先 `touch` / `input` / `swipe` 等**直接根键**；`action` 信封与 direct 等价，任选其一即可。
 
 ### 2.1 允许的 JSON 根键（与 `HylyreAgent.run_planned_*` 及 `hylyre run --plan` 一致）
 
 | 根键 | 含义 | 典型 payload |
 |------|------|----------------|
-| `action` | 单步动作 | `{"action":{"type":"touch","by_text":"登录"}}`、`{"action":{"type":"input","text":"100","by_id":"amount"}}`、`{"action":{"type":"swipe","direction":"UP","distance":60,"area":{"by_type":"Scroll"}}}` |
-| `touch` | 等价于 tap schema | `{"touch":{"by_text":"充值"}}`、`{"touch":{"x":100,"y":200}}` |
+| `touch` | 点击（推荐） | `{"touch":{"by_text":"充值"}}`、`{"touch":{"x":100,"y":200}}` |
+| `input` | 输入（推荐） | `{"input":{"text":"hello","by_id":"field","by_text":null}}` |
+| `action` | 单步动作（可选信封） | `{"action":{"type":"touch","by_text":"登录"}}`、`{"action":{"type":"input","text":"100","by_id":"amount"}}`、`{"action":{"type":"swipe","direction":"UP","distance":60,"area":{"by_type":"Scroll"}}}` |
 | `input` | 输入 schema | `{"input":{"text":"hello","by_id":"field","by_text":null}}` |
 | `swipe` | 方向滑动手势（Hypium `swipe`）；**半屏模态内需带 `area` 限定列表 `Scroll`**；竖向列表露出下方条目常用 **`UP`** | `{"swipe":{"direction":"UP","distance":55,"area":{"by_type":"Scroll"}}}` |
 | `scroll` | 纵向滚轮式滚动（Hypium `mouse_scroll`） | `{"scroll":{"direction":"down","steps":6}}` |
@@ -60,13 +65,23 @@
 
 ### 2.3 批量：`hylyre run --steps-file`（无 `test-plan.md`）
 
-已知多步 planned JSON，且**暂不需要** `test-report.md` / `trace.json` / L5 Harness 闭环时（例如本地快速重放、`session` + 多条 `tap`），可用 **JSON 文件数组**批量执行：
+已知多步 planned JSON 时，可用 **JSON 文件数组**批量执行。步骤对象根键与本节 2.1 相同；与 **`hylyre run --plan`** **互斥**。
+
+**快速重放**（仅步骤结果 JSON）：
 
 ```bash
 hylyre run --steps-file nav.json --session .hylyre/session.json --on-fail abort --out steps-result.json
 ```
 
-与 **`hylyre run --plan`** **互斥**；步骤对象根键与本节 2.1 相同。**CI / Skill 6 / 可追溯报告**仍以 **`run --plan … --report-out --trace-out`** 为准。
+**Skill 6 / Framework 报告**（与 `--plan` 同 schema 的 `test-report.md` + `trace.json`）：
+
+```bash
+hylyre run --steps-file nav.json --feature wallet-x \
+  --report-out report.md --trace-out trace.json \
+  --bundle com.example.app --page-name MainAbility
+```
+
+**冷启**：`run --plan` 与 `run --steps-file` 均支持 `--bundle` + `--page-name` + `--wait-time`（不必在 Framework 侧单独 `hdc aa start`，除非 Ability 需预启）。
 
 ## 3. 预期结果列与 VLM
 

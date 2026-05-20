@@ -101,6 +101,97 @@ async def test_run_on_agent_nl_with_vlm(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_plan_on_agent_passes_page_name_to_start_app(tmp_path: Path) -> None:
+    plan = tmp_path / "p.md"
+    plan.write_text(
+        _PLAN_TABLE + '| TC-PN | n |  | {"touch":{"by_text":"OK"}} |  | P0 | AC-PN |\n',
+        encoding="utf-8",
+    )
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    runner = ScenarioRunner(use_fakes=False)
+    try:
+        await runner.run_plan_on_agent(
+            ag,
+            plan,
+            feature="feat",
+            bundle="com.example.app",
+            page_name="MainAbility",
+            wait_time=2.5,
+            check_expected=False,
+        )
+    finally:
+        await ag.aclose()
+    starts = [e for e in ui.events if e[0] == "start_app"]
+    assert len(starts) == 1
+    assert starts[0][1]["bundle"] == "com.example.app"
+    assert starts[0][1]["page_name"] == "MainAbility"
+    assert starts[0][1]["wait_time"] == 2.5
+
+
+@pytest.mark.asyncio
+async def test_run_on_agent_backtick_json_step_no_vlm(tmp_path: Path) -> None:
+    plan = tmp_path / "p.md"
+    step = '`{"touch":{"by_text":"OK"}}`'
+    plan.write_text(
+        _PLAN_TABLE + f"| TC-BT | n |  | {step} |  | P0 | AC-BT |\n",
+        encoding="utf-8",
+    )
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    runner = ScenarioRunner(use_fakes=False)
+    try:
+        r = await runner.run_plan_on_agent(
+            ag, plan, feature="feat", check_expected=False
+        )
+    finally:
+        await ag.aclose()
+    assert r.case_results[0].status == "通过"
+    assert any(e[0] == "touch" for e in ui.events)
+
+
+@pytest.mark.asyncio
+async def test_run_on_agent_fence_json_step(tmp_path: Path) -> None:
+    from hylyre.scenario.runner import _execute_one_step
+
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    log: list = []
+    try:
+        await _execute_one_step(
+            ag,
+            "TC-F",
+            '```json\n{"back":{}}\n```',
+            log,
+        )
+    finally:
+        await ag.aclose()
+    assert any(e[0] == "press_back" for e in ui.events)
+    assert log and log[0]["kind"] == "planned_json"
+
+
+@pytest.mark.asyncio
+async def test_run_on_agent_broken_json_friendly_error(tmp_path: Path) -> None:
+    plan = tmp_path / "p.md"
+    plan.write_text(
+        _PLAN_TABLE + "| TC-BR | n |  | {broken |  | P0 | AC-BR |\n",
+        encoding="utf-8",
+    )
+    ui = FakeUiDriver()
+    ag = HylyreAgent(ui=ui, vlm=None)
+    runner = ScenarioRunner(use_fakes=False)
+    try:
+        r = await runner.run_plan_on_agent(
+            ag, plan, feature="feat", check_expected=False
+        )
+    finally:
+        await ag.aclose()
+    assert r.case_results[0].status == "失败"
+    assert "JSON 语法错误" in r.case_results[0].notes
+    assert "TC-BR" in r.case_results[0].notes
+
+
+@pytest.mark.asyncio
 async def test_run_on_agent_expected_assert(tmp_path: Path) -> None:
     plan = tmp_path / "p.md"
     plan.write_text(
