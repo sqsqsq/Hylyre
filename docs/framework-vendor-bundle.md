@@ -17,7 +17,8 @@ python scripts/build_wheel.py --clean
 产物（默认 `dist/release/`，目录已在 `.gitignore`）：
 
 - `hylyre-<version>-py3-none-any.whl`
-- `release.manifest.json`（含 `sha256`，供下游校验）
+- `release.manifest.json`（含 `sha256`，供下游校验；`integration_docs` 列出 harness 移交文档）
+- `downstream-harness-requests.md`（**framework harness 接入清单**：#3 冷重启 / positional force-stop、#6 `app page save` 调用约定与验收命令；与 wheel **同目录**打出，需一并 copy 到 vendor）
 
 POSIX 也可用：`./scripts/build-wheel.sh --clean`
 
@@ -35,11 +36,14 @@ python scripts/build_wheel.py --verify dist/release
 $src = "D:\1.code\Hylyre\dist\release"
 $dst = "<YourFramework>\framework\profiles\hmos-app\vendor\hylyre"
 New-Item -ItemType Directory -Force -Path $dst | Out-Null
-Remove-Item -Force "$dst\hylyre-*.whl","$dst\release.manifest.json" -ErrorAction Ignore
+Remove-Item -Force "$dst\hylyre-*.whl","$dst\release.manifest.json","$dst\downstream-harness-requests.md" -ErrorAction Ignore
 Copy-Item "$src\hylyre-*.whl" $dst
 Copy-Item "$src\release.manifest.json" $dst
+Copy-Item "$src\downstream-harness-requests.md" $dst
 python D:\1.code\Hylyre\scripts\build_wheel.py --verify $dst
 ```
+
+同步后请阅读 **`vendor/hylyre/downstream-harness-requests.md`**（或 `dist/release/` 内同名文件）：说明 Hylyre-core 已交付的 CLI 与 **framework 仓仍需改的 harness 项**（非 wheel 内文档，需随发布件一起分发）。
 
 ## 下游安装（需能访问 PyPI 或镜像）
 

@@ -111,6 +111,7 @@ def test_build_wheel_integration(tmp_path: Path) -> None:
     assert Path(head[1]).name == "release.manifest.json"
     assert "---" in r.stdout
     assert "Copy-Item" in r.stdout
+    assert "downstream-harness-requests.md" in r.stdout
     wheels = list(out.glob("hylyre-*-py3-none-any.whl"))
     assert len(wheels) == 1
     with zipfile.ZipFile(wheels[0]) as zf:
@@ -121,6 +122,10 @@ def test_build_wheel_integration(tmp_path: Path) -> None:
     assert mf_path.is_file()
     data = json.loads(mf_path.read_text(encoding="utf-8"))
     assert data.get("schema") == 1
+    docs = data.get("integration_docs")
+    assert isinstance(docs, list) and docs
+    assert docs[0].get("filename") == "downstream-harness-requests.md"
+    assert (out / "downstream-harness-requests.md").is_file()
     wname = data["wheel"]["filename"]
     digest = data["wheel"]["sha256"]
     assert digest == bw.compute_sha256(out / wname)

@@ -75,9 +75,11 @@ def build_manifest(
     generator_python: str,
     generator_pip: str,
     platform_desc: str,
+    *,
+    integration_docs: list[dict[str, object]] | None = None,
 ) -> dict:
     st = wheel.stat()
-    return {
+    manifest: dict[str, object] = {
         "schema": 1,
         "hylyre_version": hylyre_version,
         "wheel": {
@@ -93,12 +95,46 @@ def build_manifest(
         },
         "note": (
             "Pure-Python wheel (py3-none-any). Install with: pip install <wheel-path>; "
-            "pip will fetch transitive deps (hypium/fastmcp/etc.) from PyPI."
+            "pip will fetch transitive deps (hypium/fastmcp/etc.) from PyPI. "
+            "Framework harness integration (#3 cold-restart, #6 page save): see "
+            "downstream-harness-requests.md in this directory."
         ),
     }
+    if integration_docs:
+        manifest["integration_docs"] = integration_docs
+    return manifest
 
 
-def format_cp_hints(wheel: Path, manifest_path: Path) -> str:
+def stage_integration_docs(root: Path, out_dir: Path) -> list[dict[str, object]]:
+    """Copy handoff docs beside wheel; listed in release.manifest.json for downstream."""
+    staged: list[dict[str, object]] = []
+    for rel_src, dst_name, purpose in (
+        (
+            "docs/downstream-harness-requests.md",
+            "downstream-harness-requests.md",
+            "Framework harness integration (#3 cold-restart, #6 app page save)",
+        ),
+    ):
+        src = root / rel_src
+        if not src.is_file():
+            continue
+        dst = out_dir / dst_name
+        shutil.copy2(src, dst)
+        st = dst.stat()
+        staged.append(
+            {
+                "filename": dst_name,
+                "sha256": compute_sha256(dst),
+                "size_bytes": st.st_size,
+                "purpose": purpose,
+            }
+        )
+    return staged
+
+
+def format_cp_hints(
+    wheel: Path, manifest_path: Path, integration_docs: list[dict[str, object]] | None = None
+) -> str:
     """Human-oriented snippets to copy wheel + manifest into a framework vendor tree."""
     root = repo_root_from_script()
     build_script = (root / "scripts" / "build_wheel.py").resolve()
@@ -113,9 +149,22 @@ def format_cp_hints(wheel: Path, manifest_path: Path) -> str:
         "New-Item -ItemType Directory -Force -Path $dst | Out-Null",
         f'Copy-Item -Force "{w_abs}" $dst',
         f'Copy-Item -Force "{m_abs}" $dst',
-        verify_cmd,
-        "# Details: docs/framework-vendor-bundle.md",
     ]
+    if integration_docs:
+        for doc in integration_docs:
+            name = doc.get("filename")
+            if isinstance(name, str):
+                doc_abs = (manifest_path.parent / name).resolve()
+                lines.append(f'Copy-Item -Force "{doc_abs}" $dst')
+        lines.append(
+            "# Read downstream-harness-requests.md for harness changes (#3/#6)."
+        )
+    lines.extend(
+        [
+            verify_cmd,
+            "# Details: docs/framework-vendor-bundle.md",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -144,12 +193,14 @@ def cmd_build(args: argparse.Namespace) -> int:
     import platform as platmod
 
     version = read_version_from_pyproject(root)
+    integration_docs = stage_integration_docs(root, out_dir)
     manifest = build_manifest(
         wheel,
         version,
         f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         get_pip_version(),
         platmod.platform(),
+        integration_docs=integration_docs or None,
     )
     manifest_path = out_dir / "release.manifest.json"
     manifest_path.write_text(
@@ -159,7 +210,11 @@ def cmd_build(args: argparse.Namespace) -> int:
 
     print(str(wheel.resolve()))
     print(str(manifest_path.resolve()))
-    print(format_cp_hints(wheel, manifest_path))
+    for doc in integration_docs:
+        name = doc.get("filename")
+        if isinstance(name, str):
+            print(str((out_dir / name).resolve()))
+    print(format_cp_hints(wheel, manifest_path, integration_docs or None))
     return 0
 
 
