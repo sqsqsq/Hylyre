@@ -18,7 +18,7 @@ async def test_mcp_tool_inventory() -> None:
     mcp = build_mcp()
     tools = await mcp.list_tools()
     names = {t.name for t in tools}
-    assert len(names) == 42
+    assert len(names) == 43
     expected = {
         "hylyre_run_plan",
         "hylyre_report_verify",
@@ -32,6 +32,7 @@ async def test_mcp_tool_inventory() -> None:
         "hylyre_run_input",
         "hylyre_run_swipe",
         "hylyre_run_scroll",
+        "hylyre_run_scroll_to",
         "hylyre_run_back",
         "hylyre_run_home",
         "hylyre_run_stop_app",

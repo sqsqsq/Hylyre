@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from hylyre.api.agent import HylyreAgent
+from hylyre.api.exceptions import StepSkipped
+from hylyre.api.failure_diag import capture_step_failure
 from hylyre.api.step_dispatch import dispatch_planned_step
 from hylyre.scenario.plan_parse import ParsedPlan, TestCase, parse_test_plan
 from hylyre.scenario.step_text import (
@@ -31,8 +33,10 @@ def resolved_outcome(result: ScenarioRunResult) -> str:
         return "success"
     if any(s == "失败" for s in statuses) and any(s == "通过" for s in statuses):
         return "partial"
-    if any(s == "失败" for s in statuses) or any(s == "阻塞" for s in statuses):
+    if any(s in ("失败", "阻塞") for s in statuses):
         return "failed"
+    if all(s in ("通过", "跳过") for s in statuses):
+        return "success"
     return "success"
 
 
@@ -87,6 +91,7 @@ class ScenarioRunner:
         params: str = "",
         mock_group: str | None = None,
         check_expected: bool = True,
+        failure_dir: Path | str | None = None,
     ) -> ScenarioRunResult:
         """Drive ``HylyreAgent`` from plan rows (Hypium + optional VLM / Lyrebird)."""
         if self._use_fakes:
@@ -111,9 +116,17 @@ class ScenarioRunner:
         for case in plan.cases:
             try:
                 await self._run_case_on_agent(
-                    agent, case, tool_log, check_expected=check_expected
+                    agent,
+                    case,
+                    tool_log,
+                    check_expected=check_expected,
+                    failure_dir=failure_dir,
                 )
                 results.append(CaseResult(case=case, status="通过", notes=""))
+            except StepSkipped as e:
+                results.append(
+                    CaseResult(case=case, status="跳过", notes=str(e)[:2000])
+                )
             except Exception as e:
                 results.append(
                     CaseResult(case=case, status="失败", notes=str(e)[:2000])
@@ -133,9 +146,25 @@ class ScenarioRunner:
         tool_log: list[dict[str, Any]],
         *,
         check_expected: bool,
+        failure_dir: Path | str | None = None,
     ) -> None:
+        step_idx = 0
         for step in _iter_steps(case.steps):
-            await _execute_one_step(agent, case.case_id, step, tool_log)
+            try:
+                await _execute_one_step(
+                    agent, case.case_id, step, tool_log, step_idx=step_idx
+                )
+            except StepSkipped:
+                raise
+            except Exception as e:
+                diag = await capture_step_failure(
+                    agent,
+                    failure_dir=failure_dir,
+                    step_label=f"{case.case_id}-step-{step_idx}",
+                )
+                note = str(e) + diag
+                raise RuntimeError(note) from e
+            step_idx += 1
         if (
             check_expected
             and case.expected.strip()
@@ -176,6 +205,8 @@ async def _execute_one_step(
     case_id: str,
     step: str,
     tool_log: list[dict[str, Any]],
+    *,
+    step_idx: int = 0,
 ) -> None:
     s = normalize_planned_step_text(step)
     if not s:

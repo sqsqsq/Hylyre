@@ -20,6 +20,7 @@ _TIER_A_RUN_SPECS: tuple[tuple[str, str], ...] = (
     ("wait-gone", '{"wait_gone":{"by_text":"加载中","timeout":10}}'),
     ("wait-idle", '{"wait_idle":{"timeout":10}}'),
     ("assert-toast", '{"assert_toast":{"text":"操作成功","timeout":3}}'),
+    ("scroll-to", '{"scroll_to":{"by_text":"招商银行","in":{"by_type":"List"},"tap":true}}'),
 )
 
 

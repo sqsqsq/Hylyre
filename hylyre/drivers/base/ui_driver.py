@@ -196,6 +196,8 @@ class UiDriverBase(ABC):
         *,
         timeout: float = 3.0,
         fuzzy: str = "equal",
+        poll_interval: float = 0.3,
+        on_unsupported: str = "error",
     ) -> None:
         raise NotImplementedError("assert_toast is not implemented for this UiDriver")
 

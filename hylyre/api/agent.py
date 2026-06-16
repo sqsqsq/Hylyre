@@ -6,9 +6,18 @@ import asyncio
 import time
 from typing import Any
 
+from hylyre.api.exceptions import StepSkipped, SelectorResolutionError
+from hylyre.api.selector_ops import (
+    scroll_until_visible,
+    uses_native_only,
+    uses_resolver,
+    wait_rich_selector,
+)
+from hylyre.api.selector_resolve import has_rich_selector_fields
 from hylyre.api.selectors import require_selector
+from hylyre.diagnostic_log import diagnostic_log
 from hylyre.drivers.base import MockControllerBase, UiDriverBase, VlmClientBase
-from hylyre.ui_dump_hints import augment_ui_dump_payload
+from hylyre.ui_dump_hints import augment_ui_dump_payload, parse_bounds_rect
 
 
 def _start_app_failure_hint(bundle: str, page_name: str | None) -> str:
@@ -125,8 +134,47 @@ class HylyreAgent:
     async def _apply_touch_block(
         self, touch: dict[str, Any], *, wait_time: float
     ) -> None:
+        wt = float(touch.get("wait_time", wait_time))
+        scroll_into = touch.get("scroll_into_view")
+        if isinstance(scroll_into, dict):
+            pred = {
+                k: touch[k]
+                for k in ("by_text", "by_id", "by_type", "by_key", "match", "all")
+                if touch.get(k) is not None
+            }
+            await scroll_until_visible(
+                self,
+                target_pred=pred,
+                container=scroll_into,
+            )
+
+        if uses_native_only(touch):
+            kwargs = self._touch_from_payload(touch)
+            kwargs["wait_time"] = wt
+            await self._ui.touch(**kwargs)
+            return
+
+        if uses_resolver(touch):
+            from hylyre.api.selector_ops import resolve_touch_hit
+
+            try:
+                hit = await resolve_touch_hit(self, touch)
+                await self._ui.touch(x=hit.center[0], y=hit.center[1], wait_time=wt)
+                return
+            except SelectorResolutionError:
+                if touch.get("by_text") is not None and not has_rich_selector_fields(
+                    touch
+                ):
+                    kwargs = self._touch_from_payload(
+                        {"by_text": str(touch["by_text"])}
+                    )
+                    kwargs["wait_time"] = wt
+                    await self._ui.touch(**kwargs)
+                    return
+                raise
+
         kwargs = self._touch_from_payload(touch)
-        kwargs["wait_time"] = wait_time
+        kwargs["wait_time"] = wt
         await self._ui.touch(**kwargs)
 
     async def _apply_input_block(
@@ -147,10 +195,10 @@ class HylyreAgent:
     async def _apply_action_block(self, act: dict[str, Any]) -> None:
         t = act.get("type")
         if t == "touch":
-            payload = {k: act[k] for k in ("x", "y", "by_text", "by_id") if k in act}
-            kwargs = self._touch_from_payload(payload)
-            kwargs["wait_time"] = float(act.get("wait_time", 0.1))
-            await self._ui.touch(**kwargs)
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_touch_block(
+                block, wait_time=float(act.get("wait_time", 0.1))
+            )
         elif t == "input":
             txt = act.get("text")
             if txt is None:
@@ -397,6 +445,21 @@ class HylyreAgent:
             raise ValueError("scroll.at must be an object or omitted")
         xy = self._scroll_xy_or_none(at=at, block=block)
         sel_kw = self._scroll_selector_kwargs(at)
+        if (
+            at is None
+            and xy[0] is None
+            and xy[1] is None
+            and not any(
+                sel_kw.get(k)
+                for k in (
+                    "at_by_text",
+                    "at_by_id",
+                    "at_by_type",
+                    "at_by_key",
+                )
+            )
+        ):
+            xy = await self._auto_scroll_center()
         k1 = block.get("key1")
         k2 = block.get("key2")
         await self._ui.mouse_scroll(
@@ -408,6 +471,53 @@ class HylyreAgent:
             key2=None if k2 is None else int(k2),
             **sel_kw,
         )
+
+    async def _auto_scroll_center(self) -> tuple[int | None, int | None]:
+        """Pick center of first scrollable container from dump hints."""
+        try:
+            payload = await self.dump_ui()
+            hints = payload.get("_hylyre_hints") or {}
+            containers = hints.get("scrollable_containers") or []
+            if containers and isinstance(containers[0], dict):
+                bounds = str(containers[0].get("bounds") or "")
+                rect = parse_bounds_rect(bounds)
+                if rect:
+                    x1, y1, x2, y2 = rect
+                    return ((x1 + x2) // 2, (y1 + y2) // 2)
+        except Exception as e:
+            diagnostic_log(f"auto_scroll_center fallback: {e!r}")
+        return (None, None)
+
+    async def _apply_scroll_to_block(self, block: dict[str, Any]) -> None:
+        container = block.get("in")
+        if container is not None and not isinstance(container, dict):
+            raise ValueError("scroll_to.in must be an object or omitted")
+        pred = {
+            k: block[k]
+            for k in (
+                "by_text",
+                "by_id",
+                "by_type",
+                "by_key",
+                "match",
+                "scope",
+                "within",
+                "all",
+                "index",
+            )
+            if block.get(k) is not None
+        }
+        if not pred:
+            raise ValueError("scroll_to requires a target selector")
+        hit = await scroll_until_visible(
+            self,
+            target_pred=pred,
+            container=container if isinstance(container, dict) else None,
+            max_scrolls=int(block.get("max_scrolls") or 15),
+            swipe_distance=int(block.get("swipe_distance") or 60),
+        )
+        if block.get("tap") is True:
+            await self._ui.touch(x=hit.center[0], y=hit.center[1], wait_time=0.1)
 
     async def run_planned_swipe(self, payload: dict[str, Any]) -> None:
         """Apply ``swipe`` block (Hypium directional swipe; no VLM)."""
@@ -424,6 +534,14 @@ class HylyreAgent:
         if not isinstance(block, dict):
             raise ValueError(f"planned scroll payload missing scroll dict: {payload!r}")
         await self._apply_scroll_block(block)
+
+    async def run_planned_scroll_to(self, payload: dict[str, Any]) -> None:
+        """Scroll until target visible; optional tap (no VLM)."""
+        await self._ensure_ui()
+        block = payload.get("scroll_to")
+        if not isinstance(block, dict):
+            raise ValueError(f"planned scroll_to missing dict: {payload!r}")
+        await self._apply_scroll_to_block(block)
 
     async def _apply_back_block(self, block: dict[str, Any]) -> None:
         await self._ui.press_back(
@@ -459,6 +577,11 @@ class HylyreAgent:
         await self._ui.wait_seconds(float(sec))
 
     async def _apply_wait_for_block(self, block: dict[str, Any]) -> None:
+        if has_rich_selector_fields(block) or block.get("scope") is not None:
+            await wait_rich_selector(
+                self, block, timeout=float(block.get("timeout", 10.0)), want_gone=False
+            )
+            return
         sel = require_selector(block, step="wait_for")
         await self._ui.wait_for_selector(
             **sel,
@@ -466,6 +589,11 @@ class HylyreAgent:
         )
 
     async def _apply_wait_gone_block(self, block: dict[str, Any]) -> None:
+        if has_rich_selector_fields(block) or block.get("scope") is not None:
+            await wait_rich_selector(
+                self, block, timeout=float(block.get("timeout", 10.0)), want_gone=True
+            )
+            return
         sel = require_selector(block, step="wait_gone")
         await self._ui.wait_for_selector_gone(
             **sel,
@@ -482,11 +610,19 @@ class HylyreAgent:
         text = block.get("text")
         if text is None:
             raise ValueError("assert_toast requires text")
-        await self._ui.assert_toast(
-            str(text),
-            timeout=float(block.get("timeout", 3.0)),
-            fuzzy=str(block.get("fuzzy", "equal")),
-        )
+        on_unsupported = str(block.get("on_unsupported") or "error").strip().lower()
+        try:
+            await self._ui.assert_toast(
+                str(text),
+                timeout=float(block.get("timeout", 3.0)),
+                fuzzy=str(block.get("fuzzy", "equal")),
+                poll_interval=float(block.get("poll_interval", 0.3)),
+                on_unsupported=on_unsupported,
+            )
+        except StepSkipped:
+            if on_unsupported == "skip":
+                raise
+            raise RuntimeError("toast assertion skipped but on_unsupported is not skip")
 
     async def _apply_start_app_block(self, block: dict[str, Any]) -> None:
         bundle = block.get("bundle")

@@ -56,6 +56,48 @@ def run_device_list(*, first_only: bool = False) -> None:
     console.print(table)
 
 
+def run_device_cold_restart(
+    *,
+    bundle: str,
+    serial: str | None,
+    ability: str | None,
+    wait_time: float,
+) -> None:
+    import time
+
+    try:
+        hdc_cli.force_stop(bundle, serial=serial)
+        start_args = ["aa", "start", "-a", ability, "-b", bundle] if ability else [
+            "aa",
+            "start",
+            bundle,
+        ]
+        hdc_cli.shell(start_args, serial=serial)
+        if wait_time > 0:
+            time.sleep(wait_time)
+    except hdc_cli.HdcNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=2) from e
+    except hdc_cli.HdcError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=e.exit_code or 1) from e
+    suffix = f" (-t {serial})" if serial else ""
+    console.print(f"[green]Cold restart[/green] {bundle}{suffix}")
+
+
+def run_device_force_stop(*, bundle: str, serial: str | None) -> None:
+    try:
+        hdc_cli.force_stop(bundle, serial=serial)
+    except hdc_cli.HdcNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=2) from e
+    except hdc_cli.HdcError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=e.exit_code or 1) from e
+    suffix = f" (-t {serial})" if serial else ""
+    console.print(f"[green]Force stop[/green] {bundle}{suffix}")
+
+
 def run_device_install(hap: Path, serial: str | None) -> None:
     try:
         hdc_cli.install_hap(hap, serial=serial)

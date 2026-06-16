@@ -40,7 +40,9 @@ async def test_run_planned_scroll_default_center() -> None:
     a = HylyreAgent(ui=d)
     await a.run_planned_scroll({"scroll": {"direction": "down", "steps": 3}})
     await a.aclose()
-    _name, payload = d.events[1]
+    kinds = [e[0] for e in d.events]
+    assert kinds == ["connect", "dump_ui", "mouse_scroll", "close"]
+    _name, payload = next(e for e in d.events if e[0] == "mouse_scroll")
     assert payload["direction"] == "down"
     assert payload["steps"] == 3
     assert payload["x"] is None and payload["y"] is None

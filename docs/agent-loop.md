@@ -61,7 +61,8 @@ hylyre report verify --report report.md --trace trace.json
 - `hylyre_run_action` / `hylyre_run_tap` / `hylyre_run_input` / **`hylyre_run_swipe`** / **`hylyre_run_scroll`**
 - **Tier A**：**`hylyre_run_back`** / **`hylyre_run_home`** / **`hylyre_run_stop_app`** / **`hylyre_run_clear_app`** / **`hylyre_run_wait`** / **`hylyre_run_wait_for`** / **`hylyre_run_wait_gone`** / **`hylyre_run_wait_idle`** / **`hylyre_run_assert_toast`** / **`hylyre_run_start_app_step`**（payload 根键与 [做法 A](./agent-plan-a.md) 一致）
 - **`hylyre_start_app`**：原子启动（CLI 旗标式，非 planned JSON 根键）
-- **`hylyre_run_steps`**：一次传入 `steps` 数组（与单步相同根键），减少 MCP 往返；或 CLI **`run --steps-file`**
+- **`hylyre_run_steps`**：一次传入 `steps` 数组（与单步相同根键），减少 MCP 往返；可选 **`failure_dir`**（绝对路径，session 模式同样生效）；或 CLI **`run --steps-file`**
+- **`hylyre_run_scroll_to`**：滚到目标可见（planned 根键 `scroll_to`）；Tier A 工具亦支持可选 **`failure_dir`**
 - **`hylyre_collect_list`**：在半屏列表里滚到底并合并所有可见 **`Text`** 行（可选正则过滤）；等价 CLI：`hylyre collect-list`
 - **`hylyre_find`**：当前屏控件树扁平查找；返回 **`hits`** + 根级 **`_hylyre_hints`**（与 `dump-ui` 同源滚动信号），便于不走整树 dump 时仍能判断是否该转 **`collect-list`**。
 - **`hylyre_app_page_*`** / **`hylyre_app_find`** / **`hylyre_app_fingerprint`**：App 知识持久化（见 **[app-knowledge.md](./app-knowledge.md)**）
@@ -126,7 +127,7 @@ Hypium 系统级能力与等待类步骤，根键与 [做法 A §2.1](./agent-pl
 | 等元素出现 | `hylyre run wait-for --json '{"wait_for":{"by_text":"…","timeout":10}}'` | `hylyre_run_wait_for` | 四选一 selector |
 | 等元素消失 | `hylyre run wait-gone --json '{"wait_gone":{"by_text":"…"}}'` | `hylyre_run_wait_gone` | 同上 |
 | 等 UI 空闲 | `hylyre run wait-idle --json '{"wait_idle":{"timeout":10}}'` | `hylyre_run_wait_idle` | Hypium `wait_for_idle` |
-| 断言 Toast | `hylyre run assert-toast --json '{"assert_toast":{"text":"…"}}'` | `hylyre_run_assert_toast` | 无 VLM 时常用于轻量反馈用例 |
+| 断言 Toast | `hylyre run assert-toast --json '{"assert_toast":{"text":"…"}}'` | `hylyre_run_assert_toast` | 无 VLM 时常用于轻量反馈用例；**`on_unsupported":"skip"`** 时整条标记 **「跳过」**（见下文） |
 
 **典型 Nav 循环**（进子页后回 Tab）：`dump-ui` → 确认在子页 → **`{"back":{}}`** → 再 `dump-ui` / **`find`** 确认 Tab 文案（如「首页」）出现 → 继续 **`touch`**。
 
@@ -172,7 +173,7 @@ hylyre run scroll --json "{\"scroll\":{\"direction\":\"down\",\"steps\":6}}" --a
 
 - **`direction`**（必填）：`up` 或 `down`
 - **`steps`**（必填）：整数 ≥ 1（滚轮「格数」）
-- **`at`**：可选；**在半屏模态里与 `swipe.area` 同理**：应指向模态内的 **`Scroll`**（或稳定 **`by_id`**）。省略且无顶层 **`x`/`y`** 时，默认在 **屏幕中心比例 `(0.5, 0.5)`** 滚动，容易落在 Sheet 外。CLI：`--at-by-type Scroll` 等。
+- **`at`**：可选；**在半屏模态里与 `swipe.area` 同理**：应指向模态内的 **`Scroll`**（或稳定 **`by_id`**）。**省略且无顶层 `x`/`y` 时**：先读 **`_hylyre_hints.scrollable_containers`**，在第一个可滚动容器中心滚动；若无容器则回退 **屏幕中心比例 `(0.5, 0.5)`**（仍可能落在 Sheet 外，半屏场景仍建议显式 **`at`**）。CLI：`--at-by-type Scroll` 等。
 - **`key1` / `key2`**：可选，透传 Hypium 组合键场景
 
 示例：
@@ -181,7 +182,68 @@ hylyre run scroll --json "{\"scroll\":{\"direction\":\"down\",\"steps\":6}}" --a
 hylyre run scroll --json "{\"scroll\":{\"direction\":\"down\",\"steps\":6}}"
 ```
 
-在 **`hylyre run action`** 里使用 **`{"action":{"type":"swipe",…}}`** / **`{"action":{"type":"scroll",…}}`** 时，字段与 **根键 `swipe` / `scroll`** 的内层对象相同（与 `type` 并列）。**`hylyre run swipe` / `run scroll`** 则要求 JSON **根键**分别为 **`swipe` / `scroll`**。批量 **`hylyre run --plan`** 的「测试步骤」列支持上述两种写法（规约见 [做法 A](./agent-plan-a.md)）。
+在 **`hylyre run action`** 里使用 **`{"action":{"type":"swipe",…}}`** / **`{"action":{"type":"scroll",…}}`** 时，字段与 **根键 `swipe` / `scroll`** 的内层对象相同（与 `type` 并列）。**`{"action":{"type":"touch",…}}`** 亦支持富选择器字段（与根键 `touch` 相同）。**`hylyre run swipe` / `run scroll`** 则要求 JSON **根键**分别为 **`swipe` / `scroll`**。批量 **`hylyre run --plan`** 的「测试步骤」列支持上述两种写法（规约见 [做法 A](./agent-plan-a.md)）。
+
+## `scroll_to`（滚到目标）
+
+根键 **`scroll_to`**：在容器子树内循环 **dump → 解析目标 → 容器内 swipe**，直到命中或达到 **`max_scrolls`**（指纹稳定/回弹时提前终止）。可选 **`tap:true`** 找到后点击。
+
+```bash
+hylyre run scroll-to --json '{"scroll_to":{"by_text":"招商银行","in":{"by_type":"List"},"max_scrolls":15,"tap":true}}'
+```
+
+MCP：**`hylyre_run_scroll_to`**（payload 根键须含 `scroll_to` 或整步对象，与 Tier A 其它工具一致）。
+
+**`touch.scroll_into_view`**：内联等价——先滚到可见再点，例如 `{"touch":{"by_text":"招商银行","scroll_into_view":{"by_type":"List"}}}`。
+
+### AlphabetIndexer（A–Z 索引）
+
+长列表若带 **`AlphabetIndexer`**（如全部银行页），可先 **点字母** 再 **`scroll_to`/`touch` 目标行，不必盲滚到底：
+
+```json
+{"touch":{"by_text":"Z","within":{"by_type":"AlphabetIndexer"}}}
+{"scroll_to":{"by_text":"招商银行","in":{"by_type":"List"},"tap":true}}
+```
+
+## 富选择器语义（Agent 必读）
+
+**`by_text` 默认**走 **`dump-ui` + `resolve_targets` + 坐标点击**（不用「原生先行再兜底」——同名按钮在半模态场景下原生会静默点到背后项）。**`x`/`y`/`by_id`** 仍走 Hypium 原生；**`by_key`** 走解析器坐标。
+
+排序：**overlay 越靠上越优先** → **`clickable`** → **`enabled`** → 树序。多命中时默认取第一个，并写 **候选摘要** 到日志/`SelectorResolutionError`。
+
+- **文本抬升**：匹配到 `Text` 叶节点后，向上找最近 **`clickable=true` 或 `enabled` 祖先** 作为点击目标。
+- **`all` (AND)**：`by_text` 先抬升，再对抬升后的目标应用 `by_type`/`clickable` 等谓词。
+- **`scope:"top_overlay"`**：启发式取最上层 Sheet/Dialog/Popup 子树（HarmonyOS `bindSheet` 场景）。
+- **`wait_for` / `wait_gone`**：含富字段时轮询 dump+解析；纯单属性仍走 Hypium `wait_for_component`。
+
+逃生：**`prefer_native_text:true`** 恢复旧 `by_text` 原生行为。
+
+字段表见 [做法 A §2.1.1](./agent-plan-a.md)。
+
+## Toast 断言与「跳过」
+
+**`assert_toast`** 在本层自有轮询，并捕获 Hypium **`check_toast`** 异常，避免失败截图路径 **`NoneType`** 崩溃。
+
+```json
+{"assert_toast":{"text":"操作成功","timeout":3,"on_unsupported":"skip","poll_interval":0.3}}
+```
+
+**`on_unsupported":"skip"`** 时抛 **`StepSkipped`**，全链路（plan / `--steps-file` / MCP batch）映射为 **「跳过」**，**`resolved_outcome` 不计失败**（与 [`report-sections.yaml`](../hylyre/contracts/report-sections.yaml) 一致）。
+
+## 步骤失败诊断（`--failure-dir`）
+
+**`hylyre run --plan`** / **`run --steps-file`** / MCP **`hylyre_run_plan`** / **`hylyre_run_steps`** 支持 **`failure_dir`**（CLI **`--failure-dir`**；默认 report 同级 **`failures/`**）。
+
+步骤异常时 **best-effort** 写入：
+
+- `failure_dir/step-<n>.json` — 当时 UI 树
+- `failure_dir/step-<n>.png` — 截图
+
+诊断自身异常会被吞掉，不掩盖主错误；路径摘要写入 batch **`diagnostics`** / trace **`cases[].notes`**。
+
+**Session 模式**：`run --steps-file --session …` 经 daemon 透传 **绝对路径** 写盘（CLI 与 daemon 同机）。
+
+Tier A 单步工具（如 **`hylyre_run_scroll_to`**）可选 **`failure_dir`**；原子 **`hylyre_run_tap`/`hylyre_run_scroll`** 不在此范围。
 
 ## 自然语言未约定手势时：默认策略（Agent 必读）
 
@@ -196,7 +258,7 @@ hylyre run scroll --json "{\"scroll\":{\"direction\":\"down\",\"steps\":6}}"
 
 ## 选择器优先级
 
-翻译用户意图时：**`by_id` > `by_text` > 坐标**。坐标仅在前两者不可用时使用。
+翻译用户意图时：**`by_id` > `by_text`（默认真机解析器路径）> 坐标**。坐标仅在前两者不可用时使用。半模态 / 同名按钮优先 **`scope:"top_overlay"`** 或 **`all` + `by_type`**（见上文 **富选择器语义**）。
 
 ## 何时仍需要 Hylyre 内置 VLM
 

@@ -16,6 +16,8 @@ class FakeUiDriver(UiDriverBase):
 
     connected: bool = False
     events: list[FakeEvent] = field(default_factory=list)
+    dump_tree: dict[str, Any] | None = None
+    fail_touch_by_text: set[str] = field(default_factory=set)
 
     async def connect(self) -> None:
         self.connected = True
@@ -57,6 +59,8 @@ class FakeUiDriver(UiDriverBase):
         self._validate_touch_kwargs(
             x=x, y=y, by_text=by_text, by_id=by_id
         )
+        if by_text is not None and by_text in self.fail_touch_by_text:
+            raise RuntimeError(f"Can't find component with [BY.text('{by_text}')]")
         self.events.append(
             (
                 "touch",
@@ -104,10 +108,22 @@ class FakeUiDriver(UiDriverBase):
 
     async def dump_ui(self) -> dict[str, Any]:
         self.events.append(("dump_ui", {}))
+        tree = self.dump_tree if self.dump_tree is not None else {
+            "type": "fake_root",
+            "attributes": {"type": "Root", "bounds": "[0,0][500,500]"},
+            "children": [],
+        }
+        if "attributes" not in tree and "children" in tree:
+            pass
+        if "attributes" not in tree:
+            tree = {
+                "attributes": {"type": "Root", "bounds": "[0,0][500,500]"},
+                "children": [tree] if tree else [],
+            }
         return {
             "schema_version": "hylyre-fake-ui-dump-v1",
             "source": "fake",
-            "tree": {"type": "fake_root", "children": []},
+            "tree": tree,
         }
 
     async def swipe(
@@ -275,10 +291,18 @@ class FakeUiDriver(UiDriverBase):
         *,
         timeout: float = 3.0,
         fuzzy: str = "equal",
+        poll_interval: float = 0.3,
+        on_unsupported: str = "error",
     ) -> None:
         self.events.append(
             (
                 "assert_toast",
-                {"text": text, "timeout": timeout, "fuzzy": fuzzy},
+                {
+                    "text": text,
+                    "timeout": timeout,
+                    "fuzzy": fuzzy,
+                    "poll_interval": poll_interval,
+                    "on_unsupported": on_unsupported,
+                },
             )
         )

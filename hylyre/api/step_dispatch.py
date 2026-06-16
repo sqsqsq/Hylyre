@@ -13,6 +13,7 @@ _DISPATCH_BY_ROOT: dict[str, str] = {
     "input": "run_planned_input",
     "swipe": "run_planned_swipe",
     "scroll": "run_planned_scroll",
+    "scroll_to": "run_planned_scroll_to",
     "back": "run_planned_back",
     "home": "run_planned_home",
     "stop_app": "run_planned_stop_app",

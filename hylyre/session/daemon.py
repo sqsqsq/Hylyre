@@ -79,7 +79,7 @@ async def _dispatch(agent: HylyreAgent, method: str, params: dict[str, Any]) -> 
                 wait_time=float(params.get("wait_time") or 1.0),
             )
         return await _steps_cmd.run_steps_on_agent(
-            agent, step_objs, on_fail=str(on_fail_p)
+            agent, step_objs, on_fail=str(on_fail_p), failure_dir=params.get("failure_dir")
         )
     if method == "collect_list":
         from hylyre.cli.commands.collect_cmd import collect_list_on_agent

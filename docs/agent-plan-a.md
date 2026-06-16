@@ -37,6 +37,7 @@
 | `input` | 输入 schema | `{"input":{"text":"hello","by_id":"field","by_text":null}}` |
 | `swipe` | 方向滑动手势（Hypium `swipe`）；**半屏模态内需带 `area` 限定列表 `Scroll`**；竖向列表露出下方条目常用 **`UP`** | `{"swipe":{"direction":"UP","distance":55,"area":{"by_type":"Scroll"}}}` |
 | `scroll` | 纵向滚轮式滚动（Hypium `mouse_scroll`） | `{"scroll":{"direction":"down","steps":6}}` |
+| `scroll_to` | 在容器内滚到目标可见；可选找到后点击 | `{"scroll_to":{"by_text":"招商银行","in":{"by_type":"List"},"max_scrolls":15,"tap":true}}` |
 | `back` | 系统 / Nav 栈返回（Hypium `press_back`；**不是**全屏 `swipe RIGHT`） | `{"back":{}}`、`{"back":{"times":2}}`、`{"back":{"mode":"swipe","side":"RIGHT"}}` |
 | `home` | Home 键 / 回桌面 | `{"home":{}}` |
 | `stop_app` | 结束应用进程（硬重置会话） | `{"stop_app":{"bundle":"com.example.app"}}` |
@@ -51,6 +52,43 @@
 `action.type` 除 `touch` / `input` / `swipe` / `scroll` 外，还支持上表 Tier A 类型名（如 `{"action":{"type":"back"}}`）。
 
 `action.type` 为 `touch` 时还可带 `wait_time`（可选）。
+
+### 2.1.1 富选择器（`touch` / `wait_for` / `wait_gone` / `scroll_to`）
+
+除 **`x`/`y`/`by_id`**（仍走 Hypium 原生、唯一性强）外，**`by_text` 默认**经 **`dump-ui` → `resolve_targets` → 坐标点击**（避免半模态盖同名按钮时静默点到背后项）。**`by_key`** 同样走解析器坐标。
+
+可选字段（与 [`agent-loop.md`](./agent-loop.md) **「富选择器语义」** 一致）：
+
+| 字段 | 含义 |
+|------|------|
+| `match` | `"contains"`（默认）或 `"exact"` |
+| `visible` / `clickable` / `enabled` | 布尔过滤（`visible` 指 bounds 有面积；遮挡靠 overlay 排序） |
+| `scope` | `"top_overlay"`：只在最上层 Sheet/Dialog/Popup 子树内匹配 |
+| `within` / `below` / `above` / `after` / `before` | 相对锚点选择器（对象） |
+| `all` | 子选择器数组（AND）；`by_text` 命中文本节点后 **抬升到可点祖先** 再与其余谓词组合 |
+| `index` | 排序后候选列表的 0-based 索引 |
+| `prefer_native_text` | `true` 时 `by_text` 回退旧行为（原生 Hypium，默认关） |
+| `scroll_into_view` | 点击前先 `scroll_until_visible`（对象，如 `{"by_type":"List"}`） |
+
+示例：
+
+```json
+{"touch":{"by_text":"下一步","scope":"top_overlay"}}
+{"touch":{"all":[{"by_text":"下一步"},{"by_type":"Button"}],"scope":"top_overlay"}}
+{"wait_for":{"by_text":"短信验证","scope":"top_overlay","timeout":10}}
+{"scroll_to":{"by_text":"招商银行","in":{"by_type":"List"},"max_scrolls":15,"tap":true}}
+```
+
+**`assert_toast`** 另支持：
+
+| 字段 | 含义 |
+|------|------|
+| `on_unsupported` | `"error"`（默认）或 `"skip"`：设备/版本不支持时整条步骤标记 **「跳过」**（非失败） |
+| `poll_interval` | 轮询间隔秒数（默认 `0.3`） |
+
+**`scroll`**：省略 **`at`** 且无顶层 **`x`/`y`** 时，会读 **`_hylyre_hints.scrollable_containers`** 自动取第一个可滚动容器中心；失败回退屏幕中心比例 `(0.5,0.5)`。
+
+**`scroll_to`** 字段：`by_text`/`by_id`/`by_type`/`by_key`（目标）、`in`（容器选择器，可省略）、`max_scrolls`（默认 15）、`tap`（找到后是否点击，默认 false）。
 
 **`swipe` / `scroll` / `action.type` 为 `swipe` 或 `scroll`** 的字段说明、列表虚拟化、半屏模态及 **`dump-ui`** 的关系，见 [`agent-loop.md`](./agent-loop.md) 中的 **列表与滚屏** 与 **自然语言未约定手势时** 两节。
 
@@ -106,8 +144,11 @@ hylyre run \
   --trace-out path/to/trace.json \
   --device-sn <可选> \
   --bundle com.example.app \
-  --skip-assert-expected
+  --skip-assert-expected \
+  --failure-dir path/to/failures
 ```
+
+- **`--failure-dir`**（可选）：步骤失败时 best-effort 写入 `step-<n>.json`（UI 树）与 `step-<n>.png`（截图）；默认在 `--report-out` 同级 `failures/`。诊断采集失败不会掩盖原错误。
 
 - 需已安装：`pip install -e ".[device]"`（或 `hylyre[device]`），`hdc`/设备可用。
 - Mock：按需加 `--mock-port` / `--lyrebird-url` 与 `--mock-group`。

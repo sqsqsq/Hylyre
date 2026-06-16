@@ -9,6 +9,7 @@ PLANNED_STEP_ROOT_KEYS: tuple[str, ...] = (
     "input",
     "swipe",
     "scroll",
+    "scroll_to",
     "back",
     "home",
     "stop_app",
@@ -31,6 +32,7 @@ TIER_A_ATOMIC_CLI_COMMANDS: tuple[str, ...] = (
     "wait-gone",
     "wait-idle",
     "assert-toast",
+    "scroll-to",
 )
 
 TIER_A_MCP_TOOL_SUFFIXES: tuple[str, ...] = (
@@ -43,4 +45,5 @@ TIER_A_MCP_TOOL_SUFFIXES: tuple[str, ...] = (
     "wait_gone",
     "wait_idle",
     "assert_toast",
+    "scroll_to",
 )

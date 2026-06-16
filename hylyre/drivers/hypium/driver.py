@@ -534,17 +534,47 @@ class HypiumDriver(UiDriverBase):
         *,
         timeout: float = 3.0,
         fuzzy: str = "equal",
+        poll_interval: float = 0.3,
+        on_unsupported: str = "error",
     ) -> None:
         await self._require_raw()
         raw = self._raw
         expect = str(text)
-        to = int(timeout)
+        deadline = time.monotonic() + float(timeout)
+        interval = max(0.05, float(poll_interval))
         fz = str(fuzzy)
+        mode = str(on_unsupported).strip().lower()
 
-        def _go() -> None:
-            raw.check_toast(expect, fz, to)
+        def _try_once() -> bool:
+            try:
+                raw.check_toast(expect, fz, int(max(1, timeout)))
+                return True
+            except Exception:
+                return False
 
-        await _to_thread(_go)
+        last_err: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                ok = await _to_thread(_try_once)
+                if ok:
+                    return
+            except Exception as e:
+                last_err = e
+            await asyncio.sleep(interval)
+
+        if mode == "skip":
+            from hylyre.api.exceptions import StepSkipped
+
+            raise StepSkipped(
+                f"toast assertion unsupported or timed out for {expect!r} "
+                f"(on_unsupported=skip)"
+            )
+        msg = (
+            last_err.args[0]
+            if last_err and last_err.args
+            else f"toast not found: {expect!r} within {timeout}s"
+        )
+        raise RuntimeError(msg)
 
     async def install_app(self, hap_path: str | Path, **kwargs: Any) -> None:
         """Install a .hap from the host via Hypium (uses hdc under the hood)."""

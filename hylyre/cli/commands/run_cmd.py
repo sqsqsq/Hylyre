@@ -57,6 +57,7 @@ def execute_scenario(
     mock_group: str | None = None,
     skip_assert_expected: bool = False,
     model_backend: str | None = None,
+    failure_dir: Path | str | None = None,
 ) -> str:
     """Run plan, write artifacts, L5 verify. Returns message; raises ValueError on verify failure."""
     mb = resolve_model_backend(model_backend, use_fakes=use_fakes)
@@ -80,6 +81,7 @@ def execute_scenario(
                 lyrebird_url=lyrebird_url,
                 mock_group=mock_group,
                 skip_assert_expected=skip_assert_expected,
+                failure_dir=failure_dir,
             )
         )
         write_run_artifacts(
@@ -109,6 +111,7 @@ def execute_steps_scenario(
     session_file: Path | None = None,
     on_fail: str = "abort",
     model_backend: str | None = None,
+    failure_dir: Path | str | None = None,
 ) -> tuple[str, ScenarioRunResult]:
     """Run steps-file batch, emit plan-compatible report + trace, L5 verify."""
     from hylyre.cli.commands import steps_cmd
@@ -124,6 +127,7 @@ def execute_steps_scenario(
         page_name=page_name,
         wait_time=wait_time,
         params=params,
+        failure_dir=failure_dir,
     )
     result = steps_batch_to_scenario_result(
         feature=feature,
@@ -298,6 +302,7 @@ def run_scenario(
     mock_group: str | None = None,
     skip_assert_expected: bool = False,
     model_backend: str | None = None,
+    failure_dir: Path | str | None = None,
 ) -> None:
     try:
         msg = execute_scenario(
@@ -316,6 +321,7 @@ def run_scenario(
             mock_group=mock_group,
             skip_assert_expected=skip_assert_expected,
             model_backend=model_backend,
+            failure_dir=failure_dir,
         )
     except ValueError as exc:
         typer.secho(f"verify_report failed: {exc}", err=True)
@@ -336,6 +342,7 @@ async def _run_on_device(
     lyrebird_url: str | None,
     mock_group: str | None,
     skip_assert_expected: bool,
+    failure_dir: Path | str | None = None,
 ) -> tuple[ScenarioRunResult, str]:
     from hylyre.wiring import create_hypium_agent_with_env_vlm
 
@@ -356,6 +363,7 @@ async def _run_on_device(
             params=params,
             mock_group=mock_group or None,
             check_expected=not skip_assert_expected,
+            failure_dir=failure_dir,
         )
         return result, infer_model_backend_from_env()
     finally:

@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 from hylyre.api.agent import HylyreAgent
 from hylyre.api.step_dispatch import dispatch_planned_step
+from hylyre.cli.__main__ import app
 from hylyre.cli.commands import steps_cmd
 
 from tests.contract.fakes.fake_ui_driver import FakeUiDriver
+
+runner = CliRunner()
 
 
 @pytest.mark.asyncio
@@ -195,3 +200,64 @@ async def test_dispatch_invalid_root() -> None:
     ag = HylyreAgent(ui=FakeUiDriver(), vlm=None)
     with pytest.raises(ValueError, match="action"):
         await dispatch_planned_step(ag, {"foo": 1})
+
+
+def test_cli_run_steps_file_skipped_exits_zero(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Raw steps mode: StepSkipped must not fail the CLI stage (exit 0)."""
+
+    def _fake_execute_run_steps(*_args: object, **_kwargs: object) -> dict:
+        return {
+            "total": 1,
+            "executed": 1,
+            "on_fail": "abort",
+            "total_elapsed_ms": 1.0,
+            "results": [
+                {
+                    "index": 0,
+                    "step": {"assert_toast": {"text": "x", "on_unsupported": "skip"}},
+                    "status": "skipped",
+                    "error": "toast unsupported",
+                    "elapsed_ms": 1.0,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(steps_cmd, "execute_run_steps", _fake_execute_run_steps)
+    steps_file = tmp_path / "steps.json"
+    steps_file.write_text(
+        json.dumps([{"assert_toast": {"text": "x", "on_unsupported": "skip"}}]),
+        encoding="utf-8",
+    )
+    r = runner.invoke(app, ["run", "--steps-file", str(steps_file)])
+    assert r.exit_code == 0, r.stdout + r.stderr
+    payload = json.loads(r.stdout)
+    assert payload["results"][0]["status"] == "skipped"
+
+
+def test_cli_run_steps_file_error_exits_one(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def _fake_execute_run_steps(*_args: object, **_kwargs: object) -> dict:
+        return {
+            "total": 1,
+            "executed": 1,
+            "on_fail": "abort",
+            "total_elapsed_ms": 1.0,
+            "results": [
+                {
+                    "index": 0,
+                    "step": {"touch": {"x": 1, "y": 2}},
+                    "status": "error",
+                    "error": "boom",
+                    "elapsed_ms": 1.0,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(steps_cmd, "execute_run_steps", _fake_execute_run_steps)
+    steps_file = tmp_path / "steps.json"
+    steps_file.write_text(json.dumps([{"touch": {"x": 1, "y": 2}}]), encoding="utf-8")
+    r = runner.invoke(app, ["run", "--steps-file", str(steps_file)])
+    assert r.exit_code == 1, r.stdout + r.stderr

@@ -116,12 +116,45 @@ def page_save(
         if session is not None or device_sn is not None:
             typer.secho("--from-dump is mutually exclusive with --session/--device-sn", err=True)
             raise typer.Exit(code=2)
-        payload = _load_payload_from_file(from_dump)
+        try:
+            payload = _load_payload_from_file(from_dump)
+        except Exception as e:
+            typer.secho(f"page save failed (load dump): {e}", err=True)
+            raise typer.Exit(code=1) from e
     elif session is not None or device_sn is not None:
-        payload = _live_payload(device_sn=device_sn, session_file=session)
+        try:
+            payload = _live_payload(device_sn=device_sn, session_file=session)
+        except Exception as e:
+            typer.secho(f"page save failed (live dump): {e}", err=True)
+            raise typer.Exit(code=1) from e
     else:
-        typer.secho("pass --from-dump or (--session / --device-sn)", err=True)
-        raise typer.Exit(code=2)
+        from hylyre.drivers.hypium import hdc_cli
+
+        try:
+            targets = hdc_cli.list_targets()
+        except Exception as e:
+            typer.secho(f"page save failed (list devices): {e}", err=True)
+            raise typer.Exit(code=1) from e
+        if len(targets) == 1:
+            device_sn = targets[0]
+            try:
+                payload = _live_payload(device_sn=device_sn, session_file=None)
+            except Exception as e:
+                typer.secho(f"page save failed (live dump): {e}", err=True)
+                raise typer.Exit(code=1) from e
+        elif len(targets) == 0:
+            typer.secho(
+                "page save: no device connected; pass --from-dump or --session or --device-sn",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        else:
+            typer.secho(
+                "page save: multiple devices connected; pass --device-sn. "
+                f"Connected: {', '.join(targets)}",
+                err=True,
+            )
+            raise typer.Exit(code=2)
     try:
         write_root = resolve_write_dir(store_dir)
         path = save_page_snapshot(
@@ -134,7 +167,7 @@ def page_save(
             auto_fingerprint=auto_fingerprint,
         )
     except Exception as e:
-        typer.secho(str(e), err=True)
+        typer.secho(f"page save failed (persist snapshot): {e}", err=True)
         raise typer.Exit(code=1) from e
     typer.echo(str(path.resolve()))
 

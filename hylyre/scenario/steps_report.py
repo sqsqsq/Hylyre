@@ -46,8 +46,14 @@ def steps_batch_to_scenario_result(
             ac_ref=f"AC-{idx:03d}",
         )
         cases.append(tc)
-        status = "通过" if row.get("status") == "ok" else "失败"
-        notes = str(row.get("error", ""))[:2000] if status == "失败" else ""
+        status = "通过" if row.get("status") == "ok" else (
+            "跳过" if row.get("status") == "skipped" else "失败"
+        )
+        notes = ""
+        if status == "失败":
+            notes = str(row.get("error", ""))[:2000]
+        elif status == "跳过":
+            notes = str(row.get("error", ""))[:2000]
         case_results.append(CaseResult(case=tc, status=status, notes=notes))
         tool_log.append(
             {

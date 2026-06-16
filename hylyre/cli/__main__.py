@@ -285,6 +285,11 @@ def run_plan_batch(
         "--model-backend",
         help="trace.json model_backend override.",
     ),
+    failure_dir: Optional[Path] = typer.Option(
+        None,
+        "--failure-dir",
+        help="Directory for step-failure UI dumps and screenshots.",
+    ),
 ) -> None:
     """Batch: ``hylyre run --plan …`` or ``hylyre run --steps-file …``.
     Subcommands: action / tap / input / swipe / scroll / start-app."""
@@ -320,6 +325,9 @@ def run_plan_batch(
         wants_report = (
             feature is not None or report_out is not None or trace_out is not None
         )
+        fd = failure_dir
+        if fd is None and report_out is not None:
+            fd = Path(report_out).parent / "failures"
         if wants_report:
             need = []
             if feature is None:
@@ -355,6 +363,7 @@ def run_plan_batch(
                     session_file=session,
                     on_fail=on_fail,
                     model_backend=model_backend,
+                    failure_dir=fd,
                 )
             except ValueError as exc:
                 typer.secho(f"verify_report failed: {exc}", err=True)
@@ -377,6 +386,7 @@ def run_plan_batch(
                 bundle=bundle,
                 page_name=page_name,
                 wait_time=start_wait_time,
+                failure_dir=fd,
             )
         except Exception as e:
             typer.secho(str(e), err=True)
@@ -388,7 +398,9 @@ def run_plan_batch(
             typer.echo(str(steps_out.resolve()))
         else:
             typer.echo(text)
-        any_err = any(r.get("status") != "ok" for r in result_dict.get("results", []))
+        any_err = any(
+            r.get("status") == "error" for r in result_dict.get("results", [])
+        )
         raise typer.Exit(1 if any_err else 0)
 
     if plan is None:
@@ -408,6 +420,9 @@ def run_plan_batch(
     if need:
         typer.secho(f"Batch mode also requires: {', '.join(need)}", err=True)
         raise typer.Exit(2)
+    fd_plan = failure_dir
+    if fd_plan is None and report_out is not None:
+        fd_plan = Path(report_out).parent / "failures"
     run_cmd.run_scenario(
         plan=plan,
         feature=feature,
@@ -423,6 +438,7 @@ def run_plan_batch(
         mock_group=mock_group,
         skip_assert_expected=skip_assert_expected,
         model_backend=model_backend,
+        failure_dir=fd_plan,
     )
 
 
@@ -929,6 +945,32 @@ def device_install(
 ) -> None:
     """Install a .hap onto the device via hdc."""
     device_cmd.run_device_install(hap, serial)
+
+
+@device_app.command("force-stop")
+def device_force_stop(
+    bundle: str = typer.Option(..., "--bundle", "-b", help="Application bundle id."),
+    serial: Optional[str] = typer.Option(None, "--serial", "-t", help="Device serial."),
+) -> None:
+    """Force-stop app via positional ``aa force-stop <bundle>``."""
+    device_cmd.run_device_force_stop(bundle=bundle, serial=serial)
+
+
+@device_app.command("cold-restart")
+def device_cold_restart(
+    bundle: str = typer.Option(..., "--bundle", "-b", help="Application bundle id."),
+    serial: Optional[str] = typer.Option(None, "--serial", "-t"),
+    ability: Optional[str] = typer.Option(
+        None, "--ability", "-a", help="Main Ability name for aa start."
+    ),
+    wait_time: float = typer.Option(
+        1.0, "--wait-time", help="Seconds to wait after start."
+    ),
+) -> None:
+    """Force-stop then start app (cold restart)."""
+    device_cmd.run_device_cold_restart(
+        bundle=bundle, serial=serial, ability=ability, wait_time=wait_time
+    )
 
 
 @report_app.command("verify")

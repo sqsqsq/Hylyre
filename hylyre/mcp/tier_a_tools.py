@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 from hylyre.api.planned_step_keys import TIER_A_MCP_TOOL_SUFFIXES
@@ -29,6 +30,7 @@ def register_tier_a_mcp_tools(
         "wait_gone": "Wait for selector to disappear (planned JSON root wait_gone).",
         "wait_idle": "Wait for UI idle (planned JSON root wait_idle).",
         "assert_toast": "Assert toast text (planned JSON root assert_toast).",
+        "scroll_to": "Scroll until target visible; optional tap (planned JSON root scroll_to).",
     }
 
     for suffix in TIER_A_MCP_TOOL_SUFFIXES:
@@ -43,16 +45,50 @@ def register_tier_a_mcp_tools(
                 session_id: str | None = None,
                 mock_port: int | None = None,
                 lyrebird_url: str | None = None,
+                failure_dir: str | None = None,
             ) -> str:
                 async def _run() -> str:
+                    from hylyre.cli.commands import steps_cmd
+
+                    fd = Path(failure_dir).resolve() if failure_dir else None
                     if session_id:
+                        agent = _session_agent(session_id)
+                        if fd is not None:
+                            from hylyre.api.exceptions import StepSkipped
+
+                            out = await steps_cmd.run_steps_on_agent(
+                                agent, [payload], failure_dir=fd
+                            )
+                            row = out["results"][0]
+                            if row["status"] == "skipped":
+                                raise StepSkipped(row.get("error", "skipped"))
+                            if row["status"] != "ok":
+                                raise RuntimeError(row.get("error", "step failed"))
+                            return "ok"
                         from hylyre.api.step_dispatch import dispatch_planned_step
 
-                        agent = _session_agent(session_id)
                         await dispatch_planned_step(agent, payload)
                         return "ok"
                     import anyio
 
+                    if fd is not None:
+                        result = await anyio.to_thread.run_sync(
+                            lambda: steps_cmd.execute_run_steps(
+                                [payload],
+                                device_sn=device_sn,
+                                mock_port=mock_port,
+                                lyrebird_url=lyrebird_url,
+                                failure_dir=fd,
+                            )
+                        )
+                        row = result["results"][0]
+                        if row["status"] == "skipped":
+                            from hylyre.api.exceptions import StepSkipped
+
+                            raise StepSkipped(row.get("error", "skipped"))
+                        if row["status"] != "ok":
+                            raise RuntimeError(row.get("error", "step failed"))
+                        return "ok"
                     await anyio.to_thread.run_sync(
                         lambda: loop_cmd.execute_dispatch_planned_step(
                             payload=payload,

@@ -151,8 +151,10 @@ def build_mcp():  # type: ignore[no-untyped-def]
         mock_group: str | None = None,
         skip_assert_expected: bool = False,
         model_backend: str | None = None,
+        failure_dir: str | None = None,
     ) -> str:
         def _run() -> str:
+            fd = Path(failure_dir) if failure_dir else None
             return run_cmd.execute_scenario(
                 plan=Path(plan_path),
                 feature=feature,
@@ -168,6 +170,7 @@ def build_mcp():  # type: ignore[no-untyped-def]
                 mock_group=mock_group,
                 skip_assert_expected=skip_assert_expected,
                 model_backend=model_backend,
+                failure_dir=fd,
             )
 
         return _call_logged("hylyre_run_plan", _run)
@@ -554,10 +557,12 @@ def build_mcp():  # type: ignore[no-untyped-def]
         trace_out: str | None = None,
         steps_path: str | None = None,
         model_backend: str | None = None,
+        failure_dir: str | None = None,
     ) -> str:
         from hylyre.cli.commands import steps_cmd
 
         async def _run() -> str:
+            fd = Path(failure_dir).resolve() if failure_dir else None
             if feature or report_out or trace_out:
                 if not (feature and report_out and trace_out):
                     raise ValueError(
@@ -583,6 +588,7 @@ def build_mcp():  # type: ignore[no-untyped-def]
                         session_file=Path(session_path) if session_path else None,
                         on_fail=on_fail,
                         model_backend=model_backend,
+                        failure_dir=fd,
                     )
                 )
                 return msg
@@ -610,7 +616,7 @@ def build_mcp():  # type: ignore[no-untyped-def]
                         wait_time=float(wait_time),
                     )
                 out = await steps_cmd.run_steps_on_agent(
-                    agent, normalized, on_fail=on_fail
+                    agent, normalized, on_fail=on_fail, failure_dir=fd
                 )
                 return json.dumps(out, ensure_ascii=False)
 
@@ -629,6 +635,7 @@ def build_mcp():  # type: ignore[no-untyped-def]
                     page_name=page_name,
                     wait_time=wait_time,
                     params=params,
+                    failure_dir=fd,
                 )
             )
             return json.dumps(result, ensure_ascii=False)

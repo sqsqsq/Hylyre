@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from hylyre.api.agent import HylyreAgent
+from hylyre.api.exceptions import StepSkipped
+from hylyre.api.failure_diag import capture_step_failure
 from hylyre.api.step_dispatch import dispatch_planned_step
 from hylyre.cli.commands.loop_cmd import _session_ipc, _with_hypium_agent
 
@@ -24,6 +26,8 @@ async def run_steps_on_agent(
     agent: HylyreAgent,
     steps: list[dict[str, Any]],
     on_fail: str = "abort",
+    *,
+    failure_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """Execute planned JSON dicts sequentially; return structured per-step results."""
     mode = _normalize_on_fail(on_fail)
@@ -55,15 +59,30 @@ async def run_steps_on_agent(
                     "elapsed_ms": round(elapsed, 3),
                 }
             )
-        except Exception as e:
+        except StepSkipped as e:
             elapsed = (time.perf_counter() - t0) * 1000.0
             results.append(
                 {
                     "index": idx,
                     "step": raw,
-                    "status": "error",
+                    "status": "skipped",
                     "error": str(e)[:4000],
                     "elapsed_ms": round(elapsed, 3),
+                }
+            )
+        except Exception as e:
+            elapsed = (time.perf_counter() - t0) * 1000.0
+            diag = await capture_step_failure(
+                agent, failure_dir=failure_dir, step_label=f"step-{idx}"
+            )
+            results.append(
+                {
+                    "index": idx,
+                    "step": raw,
+                    "status": "error",
+                    "error": (str(e)[:4000] + diag)[:4000],
+                    "elapsed_ms": round(elapsed, 3),
+                    "diagnostics": diag.strip() or None,
                 }
             )
             if mode == "abort":
@@ -113,21 +132,21 @@ def execute_run_steps(
     page_name: str | None = None,
     wait_time: float = 1.0,
     params: str = "",
+    failure_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     """CLI/sync entry: IPC session daemon or ephemeral Hypium agent."""
     if session_file is not None:
-        return _session_ipc(
-            session_file,
-            "run_steps",
-            {
-                "steps": steps,
-                "on_fail": on_fail,
-                "bundle": bundle,
-                "page_name": page_name,
-                "wait_time": wait_time,
-                "params": params,
-            },
-        )
+        ipc_params: dict[str, Any] = {
+            "steps": steps,
+            "on_fail": on_fail,
+            "bundle": bundle,
+            "page_name": page_name,
+            "wait_time": wait_time,
+            "params": params,
+        }
+        if failure_dir is not None:
+            ipc_params["failure_dir"] = str(Path(failure_dir).resolve())
+        return _session_ipc(session_file, "run_steps", ipc_params)
 
     async def _go(agent: HylyreAgent) -> dict[str, Any]:
         if bundle:
@@ -137,7 +156,9 @@ def execute_run_steps(
                 params=params or "",
                 wait_time=wait_time,
             )
-        return await run_steps_on_agent(agent, steps, on_fail=on_fail)
+        return await run_steps_on_agent(
+            agent, steps, on_fail=on_fail, failure_dir=failure_dir
+        )
 
     return asyncio.run(
         _with_hypium_agent(
