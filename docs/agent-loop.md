@@ -186,7 +186,7 @@ hylyre run scroll --json "{\"scroll\":{\"direction\":\"down\",\"steps\":6}}"
 
 ## `scroll_to`（滚到目标）
 
-根键 **`scroll_to`**：在容器子树内循环 **dump → 解析目标 → 容器内 swipe**，直到命中或达到 **`max_scrolls`**（指纹稳定/回弹时提前终止）。可选 **`tap:true`** 找到后点击。
+根键 **`scroll_to`**：在容器子树内循环 **dump → 解析目标 → 容器内 swipe**，直到命中或达到 **`max_scrolls`**（指纹稳定/回弹时提前终止）。可选 **`tap:true`** 找到后点击。指定 **`in`** 容器时，第 0 次若子树未命中，会在全树中查找 **center 落在容器 bounds 内** 的目标并立即返回（避免对已可见项空滚；容器外同名不会短路）。
 
 ```bash
 hylyre run scroll-to --json '{"scroll_to":{"by_text":"招商银行","in":{"by_type":"List"},"max_scrolls":15,"tap":true}}'
@@ -215,6 +215,7 @@ MCP：**`hylyre_run_scroll_to`**（payload 根键须含 `scroll_to` 或整步对
 - **`all` (AND)**：`by_text` 先抬升，再对抬升后的目标应用 `by_type`/`clickable` 等谓词。
 - **`scope:"top_overlay"`**：启发式取最上层 Sheet/Dialog/Popup 子树（HarmonyOS `bindSheet` 场景）。
 - **`wait_for` / `wait_gone`**：含富字段时轮询 dump+解析；纯单属性仍走 Hypium `wait_for_component`。
+- **`input`**（0.3.0+）：`by_type`/`by_key`/富字段或 **`into`** → 解析 → **touch 聚焦** → **当前光标输入**；仅 `by_text`/`by_id`（无富字段）走原生；无选择器时落当前聚焦框。
 
 逃生：**`prefer_native_text:true`** 恢复旧 `by_text` 原生行为。
 

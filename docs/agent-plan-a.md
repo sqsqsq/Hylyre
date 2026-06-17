@@ -53,14 +53,16 @@
 
 `action.type` 为 `touch` 时还可带 `wait_time`（可选）。
 
-### 2.1.1 富选择器（`touch` / `wait_for` / `wait_gone` / `scroll_to`）
+### 2.1.1 富选择器（`touch` / `input` / `wait_for` / `wait_gone` / `scroll_to`）
 
 除 **`x`/`y`/`by_id`**（仍走 Hypium 原生、唯一性强）外，**`by_text` 默认**经 **`dump-ui` → `resolve_targets` → 坐标点击**（避免半模态盖同名按钮时静默点到背后项）。**`by_key`** 同样走解析器坐标。
 
-可选字段（与 [`agent-loop.md`](./agent-loop.md) **「富选择器语义」** 一致）：
+**`input`**（0.3.0+）：`by_type`/`by_key`/富字段或 **`into`** 子选择器 → 解析坐标 **`touch` 聚焦** → **`input_text` 落当前光标**（driver 契约不变）。仅 **`by_text` 或 `by_id`（无富字段）** 仍走原生 Hypium `input_text`。**无任何选择器**时输入落当前聚焦框（建议先 `touch` 聚焦）。
 
 | 字段 | 含义 |
 |------|------|
+| `into` | 一步式定位对象，如 `{"into":{"by_type":"TextInput","scope":"top_overlay"}}` |
+| `focus_wait` | 聚焦 touch 后等待秒数（默认 `0.15`） |
 | `match` | `"contains"`（默认）或 `"exact"` |
 | `visible` / `clickable` / `enabled` | 布尔过滤（`visible` 指 bounds 有面积；遮挡靠 overlay 排序） |
 | `scope` | `"top_overlay"`：只在最上层 Sheet/Dialog/Popup 子树内匹配 |
@@ -74,6 +76,8 @@
 
 ```json
 {"touch":{"by_text":"下一步","scope":"top_overlay"}}
+{"input":{"by_type":"TextInput","scope":"top_overlay","text":"123456"}}
+{"input":{"into":{"by_type":"TextInput","scope":"top_overlay"},"text":"123456"}}
 {"touch":{"all":[{"by_text":"下一步"},{"by_type":"Button"}],"scope":"top_overlay"}}
 {"wait_for":{"by_text":"短信验证","scope":"top_overlay","timeout":10}}
 {"scroll_to":{"by_text":"招商银行","in":{"by_type":"List"},"max_scrolls":15,"tap":true}}
@@ -88,7 +92,7 @@
 
 **`scroll`**：省略 **`at`** 且无顶层 **`x`/`y`** 时，会读 **`_hylyre_hints.scrollable_containers`** 自动取第一个可滚动容器中心；失败回退屏幕中心比例 `(0.5,0.5)`。
 
-**`scroll_to`** 字段：`by_text`/`by_id`/`by_type`/`by_key`（目标）、`in`（容器选择器，可省略）、`max_scrolls`（默认 15）、`tap`（找到后是否点击，默认 false）。
+**`scroll_to`** 字段：`by_text`/`by_id`/`by_type`/`by_key`（目标）、`in`（容器选择器，可省略）、`max_scrolls`（默认 15）、`tap`（找到后是否点击，默认 false）。指定 `in` 时，第 0 次会在容器子树内匹配；若未中但目标已在容器 **bounds 内**可见，也会立即命中（不空滚）。
 
 **`swipe` / `scroll` / `action.type` 为 `swipe` 或 `scroll`** 的字段说明、列表虚拟化、半屏模态及 **`dump-ui`** 的关系，见 [`agent-loop.md`](./agent-loop.md) 中的 **列表与滚屏** 与 **自然语言未约定手势时** 两节。
 

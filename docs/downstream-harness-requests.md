@@ -1,12 +1,13 @@
 # 下游 Framework Harness 集成说明（Hylyre-core 移交）
 
 > 本仓 **Hylyre-core** 已实现 CLI 能力；下列项需在 **framework** 仓（如 `framework/profiles/hmos-app/harness/providers/device-test-run.ts`）接入后才能在阶段跑中闭环。本工作区不含 `framework/`，受「禁止跨仓修改」约束，此处仅作移交清单与验收命令。
-
-来源需求：[`hylyre-optimization-requests.md`](../hylyre-optimization-requests.md) **#3**（冷重启 / force-stop 语法）、**#6**（`app page save` 调用约定）。
+>
+> **v1（0.2.0）**：[`hylyre-optimization-requests.md`](../hylyre-optimization-requests.md) **#3 / #6**  
+> **v2（0.3.0+）**：[`hylyre-optimization-requests-v2.md`](../hylyre-optimization-requests-v2.md) **F3**（personal-setup / DevEco 路径）
 
 ---
 
-## #3 阶段跑冷重启（Harness 集成）
+## #3 阶段跑冷重启（Harness 集成 · v1）
 
 ### Hylyre-core 已交付
 
@@ -65,6 +66,31 @@ hylyre run --steps-file round2.json --session .hylyre/session.json --on-fail abo
 hylyre app page save --bundle com.example.simulatedwallet --name home --session .hylyre/session.json
 echo exit=$?
 ls doc/app-snapshot-cache/com.example.simulatedwallet/pages/
+```
+
+---
+
+## F3. personal-setup 写 local 后自动补 DevEco 路径（Harness 集成 · v2）
+
+### 问题
+
+- 无 `framework.local.json` 时 testing harness 能**自动探测** DevEco 工具链。
+- 一旦因记录 active adapter 写了 `framework.local.json`（哪怕只有 `agent_adapter`），testing 门禁可能报「未配置有效 installPath/hvigorBin」并 BLOCKER。
+- `record-adapter` 与 `record-deveco-path` 不是一步完成，中间态会卡住后续阶段。
+
+### 下游需改
+
+1. **`init-orchestrate record-adapter`**（或等价流程末尾）：写 local 时**一并自动探测并补写** `toolchain.devEcoStudio.installPath`（可复用 `check-personal-setup.ts --ensure --phase testing` 的 `auto_detect_deveco` 逻辑）。
+2. 或在多 adapter 选择流程结束后**自动跑一次** DevEco 探测，避免「只记了 adapter、缺 DevEco 路径」的中间态。
+
+### 验收
+
+记录 active adapter 后，无需再单独跑 `--ensure --phase testing` 即可直接跑 testing harness。
+
+```bash
+cd framework/harness
+npx ts-node scripts/check-personal-setup.ts --json --ensure --phase testing --project-root <root>
+# 期望：record-adapter 后 local 已含 toolchain.devEcoStudio.installPath
 ```
 
 ---

@@ -96,7 +96,7 @@ def build_manifest(
         "note": (
             "Pure-Python wheel (py3-none-any). Install with: pip install <wheel-path>; "
             "pip will fetch transitive deps (hypium/fastmcp/etc.) from PyPI. "
-            "Framework harness integration (#3 cold-restart, #6 page save): see "
+            "Framework harness integration (cold-restart, page save, personal-setup): see "
             "downstream-harness-requests.md in this directory."
         ),
     }
@@ -112,7 +112,7 @@ def stage_integration_docs(root: Path, out_dir: Path) -> list[dict[str, object]]
         (
             "docs/downstream-harness-requests.md",
             "downstream-harness-requests.md",
-            "Framework harness integration (#3 cold-restart, #6 app page save)",
+            "Framework harness integration (cold-restart, page save, personal-setup)",
         ),
     ):
         src = root / rel_src

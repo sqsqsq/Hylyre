@@ -185,12 +185,32 @@ class HylyreAgent:
         by_text: str | None,
         by_id: str | None,
     ) -> None:
+        from hylyre.api.selector_ops import (
+            resolve_input_hit,
+            uses_native_input_only,
+            uses_resolver_for_input,
+        )
+
         text = value if value is not None else block.get("text")
         if text is None:
             raise ValueError("VLM input payload missing text and no value= provided")
+        mode = block.get("mode")
+        if uses_native_input_only(block):
+            bt = block.get("by_text", by_text)
+            bid = block.get("by_id", by_id)
+            await self._ui.input_text(str(text), by_text=bt, by_id=bid, mode=mode)
+            return
+        if uses_resolver_for_input(block):
+            hit = await resolve_input_hit(self, block)
+            focus_wait = float(block.get("focus_wait", 0.15))
+            await self._ui.touch(
+                x=hit.center[0], y=hit.center[1], wait_time=focus_wait
+            )
+            await self._ui.input_text(str(text), mode=mode)
+            return
         bt = block.get("by_text", by_text)
         bid = block.get("by_id", by_id)
-        await self._ui.input_text(str(text), by_text=bt, by_id=bid)
+        await self._ui.input_text(str(text), by_text=bt, by_id=bid, mode=mode)
 
     async def _apply_action_block(self, act: dict[str, Any]) -> None:
         t = act.get("type")
@@ -200,13 +220,9 @@ class HylyreAgent:
                 block, wait_time=float(act.get("wait_time", 0.1))
             )
         elif t == "input":
-            txt = act.get("text")
-            if txt is None:
-                raise ValueError("action type=input requires text")
-            await self._ui.input_text(
-                str(txt),
-                by_text=act.get("by_text"),
-                by_id=act.get("by_id"),
+            block = {k: v for k, v in act.items() if k != "type"}
+            await self._apply_input_block(
+                block, value=None, by_text=None, by_id=None
             )
         elif t == "swipe":
             block = {k: v for k, v in act.items() if k != "type"}

@@ -15,9 +15,23 @@ from hylyre.api.selector_resolve import (
     resolve_targets,
 )
 from hylyre.diagnostic_log import diagnostic_log
+from hylyre.ui_dump_hints import parse_bounds_rect
 
 if False:  # TYPE_CHECKING
     from hylyre.api.agent import HylyreAgent
+
+_INPUT_SKIP_KEYS = frozenset(
+    {
+        "text",
+        "into",
+        "mode",
+        "value",
+        "prefer_native_text",
+        "focus_wait",
+        "by_text",
+        "by_id",
+    }
+)
 
 
 def tree_from_dump(payload: dict[str, Any]) -> dict[str, Any]:
@@ -54,6 +68,93 @@ def uses_native_only(touch: dict[str, Any]) -> bool:
     if touch.get("prefer_native_text") is True and touch.get("by_text") is not None:
         return True
     return False
+
+
+def pred_from_input_block(block: dict[str, Any]) -> dict[str, Any]:
+    """Build resolver predicate from an input block (``into`` or top-level selectors)."""
+    into = block.get("into")
+    if isinstance(into, dict):
+        return {k: v for k, v in into.items() if v is not None}
+    return {
+        k: v
+        for k, v in block.items()
+        if k not in _INPUT_SKIP_KEYS and v is not None
+    }
+
+
+def uses_resolver_for_input(block: dict[str, Any]) -> bool:
+    if block.get("prefer_native_text") is True:
+        return False
+    if isinstance(block.get("into"), dict):
+        return True
+    if block.get("by_key") is not None:
+        return True
+    if block.get("by_type") is not None:
+        return True
+    if has_rich_selector_fields(block):
+        return True
+    return False
+
+
+def uses_native_input_only(block: dict[str, Any]) -> bool:
+    if uses_resolver_for_input(block):
+        return False
+    bt = block.get("by_text")
+    bid = block.get("by_id")
+    if bt is not None and bid is None:
+        return True
+    if bid is not None and bt is None:
+        return True
+    return False
+
+
+async def resolve_input_hit(agent: Any, block: dict[str, Any]) -> ResolvedHit:
+    payload = await agent.dump_ui()
+    tree = tree_from_dump(payload)
+    pred = pred_from_input_block(block)
+    try:
+        hit = resolve_one(tree, pred)
+    except SelectorResolutionError as e:
+        summary = e.candidates_summary or candidates_summary(
+            resolve_targets(tree, pred)
+        )
+        diagnostic_log(
+            f"input selector_resolve miss pred={pred!r} candidates={summary!r}"
+        )
+        raise
+    if len(resolve_targets(tree, pred)) > 1:
+        diagnostic_log(
+            f"input selector_resolve multi-hit using first of "
+            f"{candidates_summary(resolve_targets(tree, pred))!r}"
+        )
+    return hit
+
+
+def _scroll_root_bounds(scroll_root: dict[str, Any]) -> str:
+    attrs = scroll_root.get("attributes")
+    if isinstance(attrs, dict):
+        return str(attrs.get("bounds") or "")
+    return ""
+
+
+def _center_in_bounds(center: tuple[int, int], bounds_s: str) -> bool:
+    rect = parse_bounds_rect(bounds_s if bounds_s else None)
+    if rect is None:
+        return False
+    x, y = center
+    x1, y1, x2, y2 = rect
+    return x1 <= x <= x2 and y1 <= y <= y2
+
+
+def _first_hit_in_bounds(
+    tree: dict[str, Any],
+    pred: dict[str, Any],
+    bounds_s: str,
+) -> ResolvedHit | None:
+    for hit in resolve_targets(tree, pred):
+        if _center_in_bounds(hit.center, bounds_s):
+            return hit
+    return None
 
 
 async def resolve_touch_hit(agent: Any, touch: dict[str, Any]) -> ResolvedHit:
@@ -138,6 +239,12 @@ async def scroll_until_visible(
             hits = resolve_targets(scroll_root, target_pred)
             if hits:
                 return hits[0]
+            if i == 0:
+                bounds = _scroll_root_bounds(scroll_root)
+                if bounds:
+                    bounded = _first_hit_in_bounds(tree, target_pred, bounds)
+                    if bounded is not None:
+                        return bounded
         elif i == 0 and container is None:
             # No container constraint: allow whole-tree match before first scroll.
             hits = resolve_targets(tree, target_pred)

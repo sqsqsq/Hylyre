@@ -18,7 +18,7 @@ python scripts/build_wheel.py --clean
 
 - `hylyre-<version>-py3-none-any.whl`
 - `release.manifest.json`（含 `sha256`，供下游校验；`integration_docs` 列出 harness 移交文档）
-- `downstream-harness-requests.md`（**framework harness 接入清单**：#3 冷重启 / positional force-stop、#6 `app page save` 调用约定与验收命令；与 wheel **同目录**打出，需一并 copy 到 vendor）
+- `downstream-harness-requests.md`（**framework harness 接入清单**：冷重启 / page save / personal-setup DevEco 路径；与 wheel **同目录**打出，需一并 copy 到 vendor）
 
 POSIX 也可用：`./scripts/build-wheel.sh --clean`
 

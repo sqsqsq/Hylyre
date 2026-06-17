@@ -226,3 +226,180 @@ async def test_scroll_until_visible_only_searches_inside_list() -> None:
     )
     assert agent.swipes >= 1
     assert hit.center == (50, 415)
+
+
+@pytest.mark.asyncio
+async def test_input_by_type_focuses_then_types_at_cursor() -> None:
+    tree = _tree_node(
+        {"type": "Root", "bounds": "[0,0][500,600]"},
+        _tree_node(
+            {"type": "Sheet", "bounds": "[0,200][500,600]"},
+            _tree_node(
+                {
+                    "type": "TextInput",
+                    "text": "",
+                    "bounds": "[50,300][450,360]",
+                    "clickable": "true",
+                }
+            ),
+        ),
+    )
+    ui = FakeUiDriver(dump_tree=tree)
+    agent = HylyreAgent(ui=ui)
+    await agent.run_planned_input(
+        {
+            "input": {
+                "by_type": "TextInput",
+                "scope": "top_overlay",
+                "text": "123456",
+            }
+        }
+    )
+    touches = [e for e in ui.events if e[0] == "touch"]
+    inputs = [e for e in ui.events if e[0] == "input_text"]
+    assert len(touches) == 1
+    assert touches[0][1]["x"] == 250
+    assert touches[0][1]["y"] == 330
+    assert len(inputs) == 1
+    assert inputs[0][1]["text"] == "123456"
+    assert inputs[0][1]["by_text"] is None
+    assert inputs[0][1]["by_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_input_into_one_step() -> None:
+    tree = _tree_node(
+        {"type": "Root", "bounds": "[0,0][400,400]"},
+        _tree_node(
+            {
+                "type": "TextInput",
+                "text": "",
+                "bounds": "[10,10][110,60]",
+                "clickable": "true",
+            }
+        ),
+    )
+    ui = FakeUiDriver(dump_tree=tree)
+    agent = HylyreAgent(ui=ui)
+    await agent.run_planned_input(
+        {"input": {"into": {"by_type": "TextInput"}, "text": "abc"}}
+    )
+    assert any(e[0] == "touch" for e in ui.events)
+    inp = next(e for e in ui.events if e[0] == "input_text")
+    assert inp[1]["text"] == "abc"
+    assert inp[1]["by_text"] is None
+
+
+@pytest.mark.asyncio
+async def test_legacy_action_input_rich_selector() -> None:
+    tree = _tree_node(
+        {"type": "Root", "bounds": "[0,0][400,400]"},
+        _tree_node(
+            {
+                "type": "TextInput",
+                "text": "",
+                "bounds": "[10,10][110,60]",
+                "clickable": "true",
+            }
+        ),
+    )
+    ui = FakeUiDriver(dump_tree=tree)
+    agent = HylyreAgent(ui=ui)
+    await agent.run_planned_action(
+        {"action": {"type": "input", "by_type": "TextInput", "text": "xyz"}}
+    )
+    assert any(e[0] == "touch" for e in ui.events)
+    inp = next(e for e in ui.events if e[0] == "input_text")
+    assert inp[1]["text"] == "xyz"
+
+
+@pytest.mark.asyncio
+async def test_input_by_id_stays_native() -> None:
+    tree = _tree_node(
+        {"type": "Root", "bounds": "[0,0][400,400]"},
+        _tree_node(
+            {
+                "type": "TextInput",
+                "id": "sms_field",
+                "text": "",
+                "bounds": "[10,10][110,60]",
+            }
+        ),
+    )
+    ui = FakeUiDriver(dump_tree=tree)
+    agent = HylyreAgent(ui=ui)
+    await agent.run_planned_input({"input": {"by_id": "sms_field", "text": "99"}})
+    assert not any(e[0] == "touch" for e in ui.events)
+    inp = next(e for e in ui.events if e[0] == "input_text")
+    assert inp[1]["by_id"] == "sms_field"
+
+
+@pytest.mark.asyncio
+async def test_scroll_until_visible_immediate_in_container() -> None:
+    scroll = _tree_node(
+        {
+            "type": "Scroll",
+            "scrollable": "true",
+            "bounds": "[0,100][500,600]",
+        },
+        _tree_node(
+            {"type": "Text", "text": "华为支付", "bounds": "[0,200][100,230]"}
+        ),
+    )
+    tree = _tree_node({"type": "Root", "bounds": "[0,0][500,800]"}, scroll)
+
+    class OneDumpAgent:
+        swipes = 0
+
+        async def dump_ui(self) -> dict:
+            return {"tree": tree}
+
+        async def run_planned_swipe(self, _payload: dict) -> None:
+            self.swipes += 1
+
+    agent = OneDumpAgent()
+    hit = await scroll_until_visible(
+        agent,
+        target_pred={"by_text": "华为支付"},
+        container={"by_type": "Scroll"},
+    )
+    assert agent.swipes == 0
+    assert hit.center == (50, 215)
+
+
+@pytest.mark.asyncio
+async def test_scroll_bounds_fallback_when_target_sibling_of_scroll() -> None:
+    """Target visible inside scroll bounds but not under scroll_root subtree."""
+    scroll = _tree_node(
+        {
+            "type": "Scroll",
+            "scrollable": "true",
+            "bounds": "[0,100][500,600]",
+        }
+    )
+    target = _tree_node(
+        {"type": "Text", "text": "华为支付", "bounds": "[50,200][150,230]"}
+    )
+    tree = _tree_node(
+        {"type": "Root", "bounds": "[0,0][500,800]"},
+        scroll,
+        target,
+    )
+
+    class OneDumpAgent:
+        swipes = 0
+
+        async def dump_ui(self) -> dict:
+            return {"tree": tree}
+
+        async def run_planned_swipe(self, _payload: dict) -> None:
+            self.swipes += 1
+
+    agent = OneDumpAgent()
+    hit = await scroll_until_visible(
+        agent,
+        target_pred={"by_text": "华为支付"},
+        container={"by_type": "Scroll"},
+    )
+    assert agent.swipes == 0
+    assert hit.center == (100, 215)
