@@ -157,7 +157,8 @@ def format_cp_hints(
                 doc_abs = (manifest_path.parent / name).resolve()
                 lines.append(f'Copy-Item -Force "{doc_abs}" $dst')
         lines.append(
-            "# Read downstream-harness-requests.md for harness changes (#3/#6)."
+            "# Read downstream-harness-requests.md for harness integration "
+            "(cold-restart, page save, personal-setup / F3)."
         )
     lines.extend(
         [

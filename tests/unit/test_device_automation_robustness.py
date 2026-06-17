@@ -314,6 +314,110 @@ async def test_legacy_action_input_rich_selector() -> None:
 
 
 @pytest.mark.asyncio
+async def test_input_by_text_scope_keeps_text_in_predicate() -> None:
+    tree = _tree_node(
+        {"type": "Root", "bounds": "[0,0][500,600]"},
+        _tree_node(
+            {
+                "type": "TextInput",
+                "text": "验证码",
+                "bounds": "[0,0][100,40]",
+                "clickable": "true",
+            }
+        ),
+        _tree_node(
+            {"type": "Sheet", "bounds": "[0,200][500,600]"},
+            _tree_node(
+                {
+                    "type": "TextInput",
+                    "text": "",
+                    "bounds": "[50,280][450,340]",
+                    "clickable": "true",
+                }
+            ),
+            _tree_node(
+                {
+                    "type": "TextInput",
+                    "text": "验证码",
+                    "bounds": "[50,400][450,460]",
+                    "clickable": "true",
+                }
+            ),
+        ),
+    )
+    ui = FakeUiDriver(dump_tree=tree)
+    agent = HylyreAgent(ui=ui)
+    await agent.run_planned_input(
+        {
+            "input": {
+                "by_text": "验证码",
+                "scope": "top_overlay",
+                "text": "123456",
+            }
+        }
+    )
+    touches = [e for e in ui.events if e[0] == "touch"]
+    assert len(touches) == 1
+    assert touches[0][1]["x"] == 250
+    assert touches[0][1]["y"] == 430
+
+
+@pytest.mark.asyncio
+async def test_input_by_id_within_keeps_id_in_predicate() -> None:
+    tree = _tree_node(
+        {"type": "Root", "bounds": "[0,0][500,600]"},
+        _tree_node(
+            {
+                "type": "TextInput",
+                "id": "sms_field",
+                "bounds": "[0,0][100,40]",
+                "clickable": "true",
+            }
+        ),
+        _tree_node(
+            {"type": "Column", "bounds": "[0,100][500,600]"},
+            _tree_node(
+                {"type": "Text", "text": "短信验证", "bounds": "[0,120][100,150]"},
+                _tree_node(
+                    {
+                        "type": "TextInput",
+                        "text": "",
+                        "bounds": "[0,160][100,200]",
+                        "clickable": "true",
+                    }
+                ),
+                _tree_node(
+                    {
+                        "type": "TextInput",
+                        "id": "sms_field",
+                        "bounds": "[0,220][100,260]",
+                        "clickable": "true",
+                    }
+                ),
+            ),
+        ),
+    )
+    ui = FakeUiDriver(dump_tree=tree)
+    agent = HylyreAgent(ui=ui)
+    await agent.run_planned_input(
+        {
+            "input": {
+                "by_id": "sms_field",
+                "within": {"by_text": "短信验证"},
+                "text": "1234",
+            }
+        }
+    )
+    touches = [e for e in ui.events if e[0] == "touch"]
+    assert len(touches) == 1
+    assert touches[0][1]["x"] == 50
+    assert touches[0][1]["y"] == 240
+    inp = next(e for e in ui.events if e[0] == "input_text")
+    assert inp[1]["text"] == "1234"
+    assert inp[1]["by_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_input_by_id_stays_native() -> None:
     tree = _tree_node(
         {"type": "Root", "bounds": "[0,0][400,400]"},

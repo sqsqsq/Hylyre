@@ -28,8 +28,6 @@ _INPUT_SKIP_KEYS = frozenset(
         "value",
         "prefer_native_text",
         "focus_wait",
-        "by_text",
-        "by_id",
     }
 )
 
