@@ -18,6 +18,7 @@ class FakeUiDriver(UiDriverBase):
     events: list[FakeEvent] = field(default_factory=list)
     dump_tree: dict[str, Any] | None = None
     fail_touch_by_text: set[str] = field(default_factory=set)
+    native_locate_by_text: dict[str, tuple[int, int]] = field(default_factory=dict)
 
     async def connect(self) -> None:
         self.connected = True
@@ -73,6 +74,23 @@ class FakeUiDriver(UiDriverBase):
                 },
             )
         )
+
+    async def locate_by_text(self, *, by_text: str) -> tuple[int, int] | None:
+        text = str(by_text)
+        if text in self.native_locate_by_text:
+            return self.native_locate_by_text[text]
+        payload = await self.dump_ui()
+        tree = payload.get("tree")
+        if not isinstance(tree, dict):
+            return None
+        from hylyre.api.exceptions import SelectorResolutionError
+        from hylyre.api.selector_resolve import resolve_one
+
+        try:
+            hit = resolve_one(tree, {"by_text": text})
+        except SelectorResolutionError:
+            return None
+        return hit.center
 
     async def input_text(
         self,

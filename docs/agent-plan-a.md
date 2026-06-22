@@ -92,7 +92,7 @@
 
 **`scroll`**：省略 **`at`** 且无顶层 **`x`/`y`** 时，会读 **`_hylyre_hints.scrollable_containers`** 自动取第一个可滚动容器中心；失败回退屏幕中心比例 `(0.5,0.5)`。
 
-**`scroll_to`** 字段：`by_text`/`by_id`/`by_type`/`by_key`（目标）、`in`（容器选择器，可省略）、`max_scrolls`（默认 15）、`tap`（找到后是否点击，默认 false）。指定 `in` 时，第 0 次会在容器子树内匹配；若未中但目标已在容器 **bounds 内**可见，也会立即命中（不空滚）。
+**`scroll_to`** 字段：`by_text`/`by_id`/`by_type`/`by_key`（目标）、`in`（容器选择器，可省略）、`max_scrolls`（默认 15）、`tap`（找到后是否点击，默认 false）。**已可见短路优先于滚动**：容器按 selector 匹配，不要求 `scrollable`；目标已在容器 bounds 内可见时立即命中（含 `scrollable: false` 的 Scroll）。指定 `in` 时先在容器子树匹配，未中则用匹配节点 center 做 bounds 兜底（多候选按 clickable 等排序）；lift 到零面积 clickable 时 tap 回退 Text center。指定 `in` 时不会对屏外同名做全局 resolve / native 回退。无 `in` 时循环外：resolve 重试 → `locate_by_text`（Hypium）→ `tap:true` 时最终 `touch(by_text=…)`。
 
 **`swipe` / `scroll` / `action.type` 为 `swipe` 或 `scroll`** 的字段说明、列表虚拟化、半屏模态及 **`dump-ui`** 的关系，见 [`agent-loop.md`](./agent-loop.md) 中的 **列表与滚屏** 与 **自然语言未约定手势时** 两节。
 

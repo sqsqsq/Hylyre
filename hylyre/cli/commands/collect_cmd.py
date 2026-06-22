@@ -46,6 +46,22 @@ def _selector_matches(attrs: dict[str, Any], scroll_area: dict[str, str]) -> boo
     return True
 
 
+def find_container_root(
+    node: Any, scroll_area: dict[str, str], depth: int = 0
+) -> Any:
+    """First DFS match: selector only (no scrollable requirement)."""
+    if depth > 600 or not isinstance(node, dict):
+        return None
+    attrs = node.get("attributes")
+    if isinstance(attrs, dict) and _selector_matches(attrs, scroll_area):
+        return node
+    for ch in node.get("children") or []:
+        hit = find_container_root(ch, scroll_area, depth + 1)
+        if hit is not None:
+            return hit
+    return None
+
+
 def find_scroll_root(node: Any, scroll_area: dict[str, str], depth: int = 0) -> Any:
     """First DFS match: scrollable + selector."""
     if depth > 600 or not isinstance(node, dict):

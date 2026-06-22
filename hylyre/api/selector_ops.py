@@ -10,12 +10,14 @@ from hylyre.api.exceptions import SelectorResolutionError
 from hylyre.api.selector_resolve import (
     ResolvedHit,
     candidates_summary,
+    finalize_tap_hit,
     has_rich_selector_fields,
+    pick_best_tap_hit,
+    resolve_first_hit_match_center_in_container,
     resolve_one,
     resolve_targets,
 )
 from hylyre.diagnostic_log import diagnostic_log
-from hylyre.ui_dump_hints import parse_bounds_rect
 
 if False:  # TYPE_CHECKING
     from hylyre.api.agent import HylyreAgent
@@ -128,31 +130,78 @@ async def resolve_input_hit(agent: Any, block: dict[str, Any]) -> ResolvedHit:
     return hit
 
 
-def _scroll_root_bounds(scroll_root: dict[str, Any]) -> str:
-    attrs = scroll_root.get("attributes")
+def _node_bounds(node: dict[str, Any]) -> str:
+    attrs = node.get("attributes")
     if isinstance(attrs, dict):
         return str(attrs.get("bounds") or "")
     return ""
 
 
-def _center_in_bounds(center: tuple[int, int], bounds_s: str) -> bool:
-    rect = parse_bounds_rect(bounds_s if bounds_s else None)
-    if rect is None:
+def is_pure_by_text_pred(pred: dict[str, Any]) -> bool:
+    if pred.get("by_text") is None:
         return False
-    x, y = center
-    x1, y1, x2, y2 = rect
-    return x1 <= x <= x2 and y1 <= y <= y2
+    probe = {k: v for k, v in pred.items() if k != "visible"}
+    if has_rich_selector_fields(probe):
+        return False
+    return all(
+        probe.get(k) is None
+        for k in ("by_id", "by_type", "by_key", "scope", "within", "all", "index")
+    )
 
 
-def _first_hit_in_bounds(
-    tree: dict[str, Any],
-    pred: dict[str, Any],
-    bounds_s: str,
-) -> ResolvedHit | None:
-    for hit in resolve_targets(tree, pred):
-        if _center_in_bounds(hit.center, bounds_s):
-            return hit
-    return None
+def _scroll_hit(tree: dict[str, Any], pred: dict[str, Any], hit: ResolvedHit) -> ResolvedHit:
+    return finalize_tap_hit(tree, pred, hit)
+
+
+async def _try_native_by_text_hit(agent: Any, text: str) -> ResolvedHit | None:
+    """Last resort: Hypium ``BY.text`` locate (aligns with touch native fallback)."""
+    ui = getattr(agent, "_ui", None)
+    if ui is None:
+        return None
+    locate = getattr(ui, "locate_by_text", None)
+    if not callable(locate):
+        return None
+    try:
+        center = await locate(by_text=text)
+    except Exception as e:
+        diagnostic_log(f"native locate_by_text failed text={text!r} err={e!r}")
+        return None
+    if center is None:
+        return None
+    x, y = int(center[0]), int(center[1])
+    if x == 0 and y == 0:
+        return None
+    bounds_s = f"[{x},{y}][{x + 1},{y + 1}]"
+    return ResolvedHit(
+        center=(x, y),
+        tap_bounds=bounds_s,
+        attrs={"text": text, "type": "NativeByText"},
+        overlay_rank=0,
+        depth=0,
+        tree_index=0,
+        text=text,
+    )
+
+
+async def _try_pure_by_text_resolve_fallback(
+    agent: Any, target_pred: dict[str, Any]
+) -> ResolvedHit:
+    """After scroll loop (no container): re-dump resolve, then native BY.text locate."""
+    text = str(target_pred["by_text"])
+    payload = await agent.dump_ui()
+    tree = tree_from_dump(payload)
+    bare = {"by_text": text}
+    for pred in ({"by_text": text, "visible": True}, bare):
+        best = pick_best_tap_hit(resolve_targets(tree, pred))
+        if best is not None:
+            return _scroll_hit(tree, bare, best)
+    native = await _try_native_by_text_hit(agent, text)
+    if native is not None:
+        return native
+    raise SelectorResolutionError(
+        f"scroll_until_visible: target not found for by_text {text!r}",
+        candidates_summary=candidates_summary(resolve_targets(tree, bare)),
+    )
 
 
 async def resolve_touch_hit(agent: Any, touch: dict[str, Any]) -> ResolvedHit:
@@ -222,43 +271,60 @@ async def scroll_until_visible(
     from hylyre.cli.commands.collect_cmd import (
         _build_swipe_payload,
         _visible_rows_fingerprint,
+        find_container_root,
         find_scroll_root,
     )
 
-    scroll_area = dict(container) if container else {"by_type": "List"}
+    container_selector = dict(container) if container else None
+    swipe_area: dict[str, Any] = (
+        dict(container) if container else {"by_type": "List"}
+    )
     for i in range(max_scrolls):
         payload = await agent.dump_ui()
         tree = tree_from_dump(payload)
-        scroll_root = find_scroll_root(tree, scroll_area)
-        if scroll_root is None and i == 0:
-            scroll_area = {"scrollable": True}  # type: ignore[assignment]
-            scroll_root = find_scroll_root(tree, {"by_type": "Scroll"})
-        if scroll_root is not None:
-            hits = resolve_targets(scroll_root, target_pred)
-            if hits:
-                return hits[0]
-            if i == 0:
-                bounds = _scroll_root_bounds(scroll_root)
-                if bounds:
-                    bounded = _first_hit_in_bounds(tree, target_pred, bounds)
-                    if bounded is not None:
-                        return bounded
-        elif i == 0 and container is None:
-            # No container constraint: allow whole-tree match before first scroll.
+
+        # (1) Already-visible short-circuit — independent of scrollable
+        if container_selector is not None:
+            croot = find_container_root(tree, container_selector)
+            if croot is not None:
+                hits = resolve_targets(croot, target_pred)
+                best = pick_best_tap_hit(hits)
+                if best is not None:
+                    return _scroll_hit(tree, target_pred, best)
+                if i == 0:
+                    bounds = _node_bounds(croot)
+                    if bounds:
+                        bounded = resolve_first_hit_match_center_in_container(
+                            tree, target_pred, bounds
+                        )
+                        if bounded is not None:
+                            return bounded
+        else:
             hits = resolve_targets(tree, target_pred)
-            if hits:
-                return hits[0]
+            best = pick_best_tap_hit(hits)
+            if best is not None:
+                return _scroll_hit(tree, target_pred, best)
+
+        # (2) Scroll decision — still requires scrollable root
+        scroll_root = find_scroll_root(tree, swipe_area)
+        if scroll_root is None and i == 0 and container_selector is None:
+            swipe_area = {"scrollable": True}
+            scroll_root = find_scroll_root(tree, {"by_type": "Scroll"})
         if scroll_root is None:
             break
         swipe_payload = _build_swipe_payload(
-            "UP", swipe_distance, scroll_area, scroll_root
+            "UP", swipe_distance, swipe_area, scroll_root
         )
         await agent.run_planned_swipe(swipe_payload)
         await asyncio.sleep(0.2)
         payload2 = await agent.dump_ui()
         tree2 = tree_from_dump(payload2)
-        fp = _visible_rows_fingerprint(tree2, scroll_area, None)
+        fp = _visible_rows_fingerprint(tree2, swipe_area, None)
         _ = fp  # bounce detection optional
+
+    if container is None and is_pure_by_text_pred(target_pred):
+        return await _try_pure_by_text_resolve_fallback(agent, target_pred)
+
     raise SelectorResolutionError(
         f"scroll_until_visible: target not found after {max_scrolls} scrolls",
         candidates_summary=[],

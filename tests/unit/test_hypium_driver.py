@@ -89,6 +89,21 @@ async def test_hypium_input_text_with_component(mock_load: MagicMock) -> None:
 
 @pytest.mark.asyncio
 @patch("hylyre.drivers.hypium.driver.load_hypium_shim")
+async def test_hypium_locate_by_text(mock_load: MagicMock) -> None:
+    raw = MagicMock()
+    comp = MagicMock()
+    comp.getBounds.return_value = [10, 20, 110, 80]
+    raw.find_component.return_value = comp
+    mock_load.return_value = _fake_shim(raw)
+    d = HypiumDriver()
+    await d.connect()
+    center = await d.locate_by_text(by_text="OK")
+    assert center == (60, 50)
+    raw.find_component.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("hylyre.drivers.hypium.driver.load_hypium_shim")
 async def test_hypium_screenshot_reads_file(mock_load: MagicMock, tmp_path) -> None:
     raw = MagicMock()
 

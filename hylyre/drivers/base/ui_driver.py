@@ -58,6 +58,11 @@ class UiDriverBase(ABC):
     ) -> None:
         raise NotImplementedError
 
+    async def locate_by_text(self, *, by_text: str) -> tuple[int, int] | None:
+        """Hypium-native locate (``BY.text`` + ``find_component``). Optional; default unsupported."""
+        _ = by_text
+        return None
+
     @abstractmethod
     async def input_text(
         self,

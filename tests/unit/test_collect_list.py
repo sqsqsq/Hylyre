@@ -171,6 +171,26 @@ def test_find_scroll_root_skips_non_scrollable_outer() -> None:
     assert root["attributes"]["bounds"] == "[0,333][1320,1688]"
 
 
+def test_find_container_root_matches_non_scrollable() -> None:
+    tree = {
+        "attributes": {"type": "Root", "bounds": "[0,0][1320,2800]"},
+        "children": [
+            {
+                "attributes": {
+                    "type": "Scroll",
+                    "scrollable": "false",
+                    "bounds": "[0,285][1320,2036]",
+                },
+                "children": [],
+            }
+        ],
+    }
+    root = collect_cmd.find_container_root(tree, {"by_type": "Scroll"})
+    assert root is not None
+    assert root["attributes"]["scrollable"] == "false"
+    assert collect_cmd.find_scroll_root(tree, {"by_type": "Scroll"}) is None
+
+
 @pytest.mark.asyncio
 async def test_collect_swipe_adds_scrollable_to_area() -> None:
     """Verify swipe payload includes scrollable:true so Hypium finds the inner container."""

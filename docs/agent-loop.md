@@ -186,7 +186,7 @@ hylyre run scroll --json "{\"scroll\":{\"direction\":\"down\",\"steps\":6}}"
 
 ## `scroll_to`（滚到目标）
 
-根键 **`scroll_to`**：在容器子树内循环 **dump → 解析目标 → 容器内 swipe**，直到命中或达到 **`max_scrolls`**（指纹稳定/回弹时提前终止）。可选 **`tap:true`** 找到后点击。指定 **`in`** 容器时，第 0 次若子树未命中，会在全树中查找 **center 落在容器 bounds 内** 的目标并立即返回（避免对已可见项空滚；容器外同名不会短路）。
+根键 **`scroll_to`**：在容器子树内循环 **dump → 解析目标 → 容器内 swipe**，直到命中或达到 **`max_scrolls`**（指纹稳定/回弹时提前终止）。可选 **`tap:true`** 找到后点击。**已可见短路在滚动之前**：容器匹配不要求 `scrollable=true`（HarmonyOS 一屏内容时 Scroll 常报告 `scrollable: false`）；目标已在容器/屏内时第 0 轮直接命中，**即使容器不可滚**。指定 **`in`** 时，若子树未命中，会在全树中查找 **匹配节点 center 落在容器 bounds 内** 的目标并立即返回（容器外同名不会短路；指定 `in` 时不再跨容器 List→Scroll 降级）。无 **`in`** 时循环结束后依次尝试：全树 resolve 重试（去掉 `visible` 过滤）→ **`UiDriver.locate_by_text`（Hypium `BY.text` + `find_component`）**；`scroll_to` 且 **`tap:true`** 时若仍失败，与 **`touch`** 相同走 **`by_text` 原生 tap**。
 
 ```bash
 hylyre run scroll-to --json '{"scroll_to":{"by_text":"招商银行","in":{"by_type":"List"},"max_scrolls":15,"tap":true}}'

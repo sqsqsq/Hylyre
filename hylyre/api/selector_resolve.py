@@ -122,6 +122,128 @@ def _center_of_bounds(bounds_s: str | None) -> tuple[int, int] | None:
     return ((x1 + x2) // 2, (y1 + y2) // 2)
 
 
+def _center_in_bounds(center: tuple[int, int], bounds_s: str) -> bool:
+    rect = parse_bounds_rect(bounds_s if bounds_s else None)
+    if rect is None:
+        return False
+    x, y = center
+    x1, y1, x2, y2 = rect
+    return x1 <= x <= x2 and y1 <= y <= y2
+
+
+def _hit_with_match_node_center(hit: ResolvedHit, fn: _FlatNode) -> ResolvedHit:
+    match_bounds = str(fn.attrs.get("bounds") or "")
+    mc = _center_of_bounds(match_bounds)
+    if mc is None:
+        return hit
+    return ResolvedHit(
+        center=mc,
+        tap_bounds=match_bounds,
+        attrs=dict(fn.attrs),
+        overlay_rank=fn.overlay_rank,
+        depth=fn.depth,
+        tree_index=fn.tree_index,
+        type=str(fn.attrs.get("type") or ""),
+        text=_node_text(fn.attrs),
+        id=str(fn.attrs.get("id") or ""),
+        key=str(fn.attrs.get("key") or ""),
+        clickable=_attr_bool(fn.attrs, "clickable"),
+        enabled=_attr_bool(fn.attrs, "enabled"),
+    )
+
+
+def _is_usable_tap_hit(hit: ResolvedHit) -> bool:
+    rect = parse_bounds_rect(hit.tap_bounds if hit.tap_bounds else None)
+    if rect is None or _bounds_area(rect) <= 0:
+        return False
+    x, y = hit.center
+    x1, y1, x2, y2 = rect
+    return x1 <= x <= x2 and y1 <= y <= y2
+
+
+def finalize_tap_hit(
+    tree: dict[str, Any],
+    pred: dict[str, Any],
+    hit: ResolvedHit,
+) -> ResolvedHit:
+    """Ensure tap center is usable; fall back to matched node center when lift is degenerate."""
+    if _is_usable_tap_hit(hit):
+        return hit
+    work_pred = dict(pred)
+    work_pred.pop("scope", None)
+    work_pred.pop("within", None)
+    for root in _search_roots(tree, pred):
+        flat, screen_area = _flatten_subtree(root)
+        for fn in flat:
+            if not _pred_matches_node(flat, fn, work_pred, screen_area=screen_area):
+                continue
+            remediated = _hit_with_match_node_center(hit, fn)
+            if _is_usable_tap_hit(remediated):
+                return remediated
+            alt = _flat_to_hit(fn)
+            if alt and _is_usable_tap_hit(alt):
+                return alt
+    return hit
+
+
+def pick_best_tap_hit(hits: list[ResolvedHit]) -> ResolvedHit | None:
+    ordered = _sort_hits(hits)
+    for hit in ordered:
+        if _is_usable_tap_hit(hit):
+            return hit
+    return ordered[0] if ordered else None
+
+
+def _uses_text_lift(work_pred: dict[str, Any]) -> bool:
+    return work_pred.get("by_text") is not None or (
+        work_pred.get("all")
+        and any(
+            isinstance(s, dict) and s.get("by_text") is not None
+            for s in (work_pred.get("all") or [])
+        )
+    )
+
+
+def resolve_first_hit_match_center_in_container(
+    tree: dict[str, Any],
+    pred: dict[str, Any],
+    container_bounds_s: str,
+) -> ResolvedHit | None:
+    """Full-tree resolve; accept when matched node center is inside container bounds."""
+    if not container_bounds_s:
+        return None
+    work_pred = dict(pred)
+    work_pred.pop("scope", None)
+    work_pred.pop("within", None)
+
+    candidates: list[ResolvedHit] = []
+    for root in _search_roots(tree, pred):
+        flat, screen_area = _flatten_subtree(root)
+        for fn in flat:
+            if not _pred_matches_node(flat, fn, work_pred, screen_area=screen_area):
+                continue
+            match_center = _center_of_bounds(str(fn.attrs.get("bounds") or ""))
+            if match_center is None or not _center_in_bounds(
+                match_center, container_bounds_s
+            ):
+                continue
+            if _uses_text_lift(work_pred):
+                lifted = _lift_tap_target(flat, fn.tree_index, screen_area=screen_area)
+                hit = _flat_to_hit(lifted)
+            else:
+                hit = _flat_to_hit(fn)
+            if hit is None:
+                continue
+            if not _center_in_bounds(hit.center, container_bounds_s):
+                hit = _hit_with_match_node_center(hit, fn)
+            hit = finalize_tap_hit(tree, pred, hit)
+            if _is_usable_tap_hit(hit):
+                candidates.append(hit)
+    if not candidates:
+        return None
+    return _sort_hits(candidates)[0]
+
+
 def _find_overlay_roots(tree: dict[str, Any]) -> list[dict[str, Any]]:
     overlays: list[dict[str, Any]] = []
 

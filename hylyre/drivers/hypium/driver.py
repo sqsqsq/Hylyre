@@ -110,6 +110,49 @@ def _normalize_hypium_swipe_side(side: str | None) -> Any:
     return mapping[key]
 
 
+def _center_from_hypium_bounds(raw_bounds: Any) -> tuple[int, int] | None:
+    from hylyre.ui_dump_hints import parse_bounds_rect
+
+    if isinstance(raw_bounds, str):
+        rect = parse_bounds_rect(raw_bounds)
+    elif isinstance(raw_bounds, (list, tuple)) and len(raw_bounds) >= 4:
+        rect = tuple(int(v) for v in raw_bounds[:4])  # type: ignore[assignment]
+    elif raw_bounds is not None and all(
+        hasattr(raw_bounds, attr) for attr in ("left", "top", "right", "bottom")
+    ):
+        rect = (
+            int(raw_bounds.left),
+            int(raw_bounds.top),
+            int(raw_bounds.right),
+            int(raw_bounds.bottom),
+        )
+    else:
+        return None
+    if rect is None:
+        return None
+    x1, y1, x2, y2 = rect
+    return ((x1 + x2) // 2, (y1 + y2) // 2)
+
+
+def _hypium_component_center(comp: Any) -> tuple[int, int] | None:
+    for name in ("getBounds", "get_bounds"):
+        fn = getattr(comp, name, None)
+        if callable(fn):
+            center = _center_from_hypium_bounds(fn())
+            if center is not None:
+                return center
+    bounds = getattr(comp, "bounds", None)
+    if bounds is not None:
+        return _center_from_hypium_bounds(bounds)
+    for name in ("getCenter", "get_center", "center"):
+        val = getattr(comp, name, None)
+        if callable(val):
+            val = val()
+        if isinstance(val, (list, tuple)) and len(val) >= 2:
+            return (int(val[0]), int(val[1]))
+    return None
+
+
 def _hypium_single_selector(shim: _HypiumShim, **kw: Any) -> Any:
     """At most one of by_text / by_id / by_type / by_key, optionally chained with scrollable."""
     by_text = kw.get("by_text")
@@ -232,6 +275,22 @@ class HypiumDriver(UiDriverBase):
                 offset=None,
             )
         )
+
+    async def locate_by_text(self, *, by_text: str) -> tuple[int, int] | None:
+        await self._require_raw()
+        shim = load_hypium_shim()
+        raw = self._raw
+        text = str(by_text)
+
+        def _locate() -> tuple[int, int] | None:
+            comp = raw.find_component(shim.BY.text(text))
+            return _hypium_component_center(comp)
+
+        try:
+            return await _to_thread(_locate)
+        except Exception as e:
+            diagnostic_log(f"hypium locate_by_text miss text={text!r} err={e!r}")
+            return None
 
     async def input_text(
         self,

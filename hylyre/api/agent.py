@@ -8,6 +8,7 @@ from typing import Any
 
 from hylyre.api.exceptions import StepSkipped, SelectorResolutionError
 from hylyre.api.selector_ops import (
+    is_pure_by_text_pred,
     scroll_until_visible,
     uses_native_only,
     uses_resolver,
@@ -525,13 +526,28 @@ class HylyreAgent:
         }
         if not pred:
             raise ValueError("scroll_to requires a target selector")
-        hit = await scroll_until_visible(
-            self,
-            target_pred=pred,
-            container=container if isinstance(container, dict) else None,
-            max_scrolls=int(block.get("max_scrolls") or 15),
-            swipe_distance=int(block.get("swipe_distance") or 60),
-        )
+        if pred.get("by_text") is not None and not has_rich_selector_fields(pred):
+            pred.setdefault("visible", True)
+        try:
+            hit = await scroll_until_visible(
+                self,
+                target_pred=pred,
+                container=container if isinstance(container, dict) else None,
+                max_scrolls=int(block.get("max_scrolls") or 15),
+                swipe_distance=int(block.get("swipe_distance") or 60),
+            )
+        except SelectorResolutionError:
+            if (
+                container is None
+                and is_pure_by_text_pred(pred)
+                and block.get("tap") is True
+            ):
+                await self._ui.touch(
+                    by_text=str(pred["by_text"]),
+                    wait_time=0.1,
+                )
+                return
+            raise
         if block.get("tap") is True:
             await self._ui.touch(x=hit.center[0], y=hit.center[1], wait_time=0.1)
 
