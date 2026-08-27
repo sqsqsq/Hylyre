@@ -25,13 +25,20 @@
 "%LocalAppData%\Programs\Python\Python312\python.exe" -m pytest
 ```
 
-### 打 wheel 给下游 framework（vendor）
+### 打发布件给下游 framework（vendor）
 
 未在 PyPI 发布时，业务仓可将本仓库产出的 **`py3-none-any`** wheel 提交到其 `vendor/`。一条命令：
 
 ```bat
 python scripts\build_wheel.py --clean
 python scripts\build_wheel.py --verify dist\release
+```
+
+下游仓库若**禁止提交 `.whl` 等二进制归档**，改用**明文源码树**发布（manifest schema 2，与 wheel 模式并存）：
+
+```bat
+python scripts\build_wheel.py --source --clean
+python scripts\build_wheel.py --verify dist\release-src
 ```
 
 详见 **[docs/framework-vendor-bundle.md](docs/framework-vendor-bundle.md)**。

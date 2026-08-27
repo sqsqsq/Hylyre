@@ -40,3 +40,7 @@ jobs:
         run: python scripts/build_wheel.py --clean
       - name: Verify manifest
         run: python scripts/build_wheel.py --verify dist/release
+      - name: Build plain-source release
+        run: python scripts/build_wheel.py --source --clean
+      - name: Verify source manifest
+        run: python scripts/build_wheel.py --verify dist/release-src
