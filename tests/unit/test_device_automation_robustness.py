@@ -59,7 +59,9 @@ async def test_by_text_uses_resolver_coordinate_tap() -> None:
     }
     ui = FakeUiDriver(dump_tree=tree, fail_touch_by_text={"下一步"})
     agent = HylyreAgent(ui=ui)
-    await agent.run_planned_tap({"touch": {"by_text": "下一步"}})
+    await agent.run_planned_tap(
+        {"touch": {"by_text": "下一步", "scope": "top_overlay"}}
+    )
     touches = [e for e in ui.events if e[0] == "touch"]
     assert len(touches) == 1
     assert touches[0][1]["x"] == 50
@@ -142,7 +144,7 @@ def test_resolved_outcome_skips_not_failed() -> None:
         case_results=(CaseResult(case=tc, status="跳过", notes=""),),
         use_fakes=False,
     )
-    assert resolved_outcome(result) == "success"
+    assert resolved_outcome(result) == "partial"
 
 
 @pytest.mark.asyncio
@@ -898,13 +900,13 @@ async def test_scroll_pre_lift_prefers_clickable_ranked_hit() -> None:
             self.swipes += 1
 
     agent = OneDumpAgent()
-    hit = await scroll_until_visible(
-        agent,
-        target_pred={"by_text": "项"},
-        container={"by_type": "Scroll"},
-    )
+    with pytest.raises(Exception, match="ambiguous"):
+        await scroll_until_visible(
+            agent,
+            target_pred={"by_text": "项"},
+            container={"by_type": "Scroll"},
+        )
     assert agent.swipes == 0
-    assert hit.center == (125, 320)
 
 
 @pytest.mark.asyncio
@@ -915,12 +917,12 @@ async def test_scroll_native_by_text_locate_when_dump_empty() -> None:
         native_locate_by_text={"仅原生": (200, 300)},
     )
     agent = HylyreAgent(ui=ui)
-    hit = await scroll_until_visible(
-        agent,
-        target_pred={"by_text": "仅原生", "visible": True},
-        container=None,
-    )
-    assert hit.center == (200, 300)
+    with pytest.raises(Exception, match="not found"):
+        await scroll_until_visible(
+            agent,
+            target_pred={"by_text": "仅原生", "visible": True},
+            container=None,
+        )
 
 
 @pytest.mark.asyncio
@@ -928,9 +930,8 @@ async def test_scroll_to_block_native_touch_when_all_resolve_misses() -> None:
     tree = _tree_node({"type": "Root", "bounds": "[0,0][500,800]"})
     ui = FakeUiDriver(dump_tree=tree)
     agent = HylyreAgent(ui=ui)
-    await agent.run_planned_scroll_to(
-        {"scroll_to": {"by_text": "原生点击", "tap": True}}
-    )
-    touches = [e for e in ui.events if e[0] == "touch"]
-    assert len(touches) == 1
-    assert touches[0][1]["by_text"] == "原生点击"
+    with pytest.raises(Exception, match="not found"):
+        await agent.run_planned_scroll_to(
+            {"scroll_to": {"by_text": "原生点击", "tap": True}}
+        )
+    assert not [e for e in ui.events if e[0] == "touch"]

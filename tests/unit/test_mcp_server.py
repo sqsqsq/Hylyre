@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import pytest
 
@@ -123,6 +124,9 @@ async def test_mcp_run_plan_matches_cli_fake_pipeline(tmp_path: Path) -> None:
         msg = out.content[0].text
         assert "Wrote" in msg
         assert report.is_file() and trace.is_file()
+        trace_data = json.loads(trace.read_text(encoding="utf-8"))
+        assert trace_data["cases"][0]["steps"]
+        assert trace_data["tool_calls"]
         v = await client.call_tool(
             "hylyre_report_verify",
             {

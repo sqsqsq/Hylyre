@@ -10,7 +10,24 @@ from tests.contract.fakes.fake_ui_driver import FakeUiDriver
 
 @pytest.mark.asyncio
 async def test_run_planned_swipe_records_event() -> None:
-    d = FakeUiDriver()
+    d = FakeUiDriver(
+        dump_tree={
+            "attributes": {
+                "type": "Root",
+                "bounds": "[0,0][500,500]",
+            },
+            "children": [
+                {
+                    "attributes": {
+                        "type": "Scroll",
+                        "scrollable": "true",
+                        "bounds": "[0,0][500,500]",
+                    },
+                    "children": [],
+                }
+            ],
+        }
+    )
     a = HylyreAgent(ui=d)
     await a.run_planned_swipe(
         {
@@ -25,8 +42,8 @@ async def test_run_planned_swipe_records_event() -> None:
     )
     await a.aclose()
     kinds = [e[0] for e in d.events]
-    assert kinds == ["connect", "swipe", "close"]
-    _name, payload = d.events[1]
+    assert kinds == ["connect", "dump_ui", "swipe", "close"]
+    _name, payload = d.events[2]
     assert payload["direction"] == "DOWN"
     assert payload["distance"] == 40
     assert payload["area_by_type"] == "Scroll"
@@ -51,7 +68,25 @@ async def test_run_planned_scroll_default_center() -> None:
 
 @pytest.mark.asyncio
 async def test_run_planned_action_swipe_and_scroll() -> None:
-    d = FakeUiDriver()
+    d = FakeUiDriver(
+        dump_tree={
+            "attributes": {
+                "type": "Root",
+                "bounds": "[0,0][500,500]",
+            },
+            "children": [
+                {
+                    "attributes": {
+                        "type": "Scroll",
+                        "text": "List",
+                        "scrollable": "true",
+                        "bounds": "[0,0][500,500]",
+                    },
+                    "children": [],
+                }
+            ],
+        }
+    )
     a = HylyreAgent(ui=d)
     await a.run_planned_action(
         {"action": {"type": "swipe", "direction": "LEFT", "distance": 50}}
@@ -70,6 +105,7 @@ async def test_run_planned_action_swipe_and_scroll() -> None:
     assert [e[0] for e in d.events] == [
         "connect",
         "swipe",
+        "dump_ui",
         "mouse_scroll",
         "close",
     ]

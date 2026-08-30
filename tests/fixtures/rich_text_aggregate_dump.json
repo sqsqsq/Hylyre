@@ -1,0 +1,35 @@
+{
+  "schema_version": "hylyre-fixture-ui-v1",
+  "source": "deterministic-rich-text-fixture",
+  "conceptual_spans": [
+    {"text": "已阅读并同意", "clickable": false},
+    {"text": "银行信用卡关联还款协议", "clickable": true}
+  ],
+  "tree": {
+    "attributes": {
+      "type": "Root",
+      "bounds": "[0,0][500,800]"
+    },
+    "children": [
+      {
+        "attributes": {
+          "type": "Row",
+          "bounds": "[20,300][480,360]",
+          "clickable": "true",
+          "enabled": "true"
+        },
+        "children": [
+          {
+            "attributes": {
+          "type": "Text",
+          "inline_target": "true",
+          "text": "已阅读并同意银行信用卡关联还款协议",
+              "bounds": "[30,310][470,350]"
+            },
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

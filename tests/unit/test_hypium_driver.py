@@ -83,7 +83,7 @@ async def test_hypium_input_text_with_component(mock_load: MagicMock) -> None:
     d = HypiumDriver()
     await d.connect()
     await d.input_text("hi", by_id="username")
-    raw.find_component.assert_called_once()
+    raw.find_all_components.assert_called_once()
     raw.input_text.assert_called_once()
 
 

@@ -23,3 +23,8 @@ The system SHALL provide a Hylyre CLI entry that runs host-side `hdc file send` 
 ### Requirement: Checklist alignment
 
 The system SHALL keep `mitm_trust_instructions()` consistent with the executable path (`mock push-ca` referenced in prose; post-push steps for on-device install).
+
+#### Scenario: Instructions name the executable path
+
+- **WHEN** the trust-instruction text is generated
+- **THEN** it names `hylyre mock push-ca` and includes the post-push on-device installation steps

@@ -125,6 +125,14 @@ hylyre run --steps-file nav.json --feature wallet-x \
 
 **冷启**：`run --plan` 与 `run --steps-file` 均支持 `--bundle` + `--page-name` + `--wait-time`（不必在 Framework 侧单独 `hdc aa start`，除非 Ability 需预启）。
 
+### 2.4 确定性 selector 与证据约束
+
+0.4.0 正式执行只接受 `match: "exact"` 或 `match: "contains"`；省略时运行证据会记录 `effective_match: "contains"`，不会把 exact 失败自动放宽为 contains。`touch`、`input`、`wait_for`、`wait_gone`、`scroll_to` 及滚动容器 selector 共用这一语义。action selector 命中 0 个返回 `selector_not_found`，命中多个返回 `selector_ambiguous` 和候选摘要；需要消歧时显式使用既有 `index`、`scope`、`within` 或 `all`。非法值（包括 `starts_with`、拼写错误）也使用冻结的 `selector_not_found`，不会新增错误枚举。
+
+`swipe.area`、`scroll.at` 和 `scroll_to.in` 先经过同一 dump resolver 做唯一性预检；多候选不会固定记录 `candidate_count=1`，也不会由 Hypium/DFS 默认选第一项。没有 `top_overlay` 或相对 anchor 命中时不会放宽约束到整棵树。
+
+普通 Text 的完整节点文本和普通动态 Row 都按正常 `contains` 使用，不根据 Row/Button 祖先类型猜测富文本。若宿主明确在聚合 Text 上提供 `inline_target=true`，或提供独立 Span/semantic action/片段 bounds，才进入 inline 语义；有 inline signal 但没有独立可点击区域时，必须 fail-closed 为 `inline_target_unresolvable`，不能点击父 Text/Row 中心或按字符比例猜坐标；`all[]` 内的 `by_text` 同样适用。未声明 clickable 语义的普通 Span 即使有 bounds 也不可点击。富文本动作仍需计划中的后置 assertion 才能使 case verified。完整的 `StepResult`、三轴 verdict 和迁移边界见 [`docs/deterministic-verification.md`](deterministic-verification.md)。
+
 ## 3. 预期结果列与 VLM
 
 `runner._run_case_on_agent` 中：仅当 **`agent.vlm is not None` 且 `check_expected`** 时才会对「预期结果」列调用 `ai_assert`。
@@ -135,6 +143,11 @@ hylyre run --steps-file nav.json --feature wallet-x \
 - 若仍希望校验，可二选一：配置 VLM；或对关键步骤多用 JSON `touch`/`input` 表达清楚、接受无自动断言。
 
 命令行上 `--skip-assert-expected` 会在 **有 VLM** 时也跳过对「预期结果」的断言。
+
+trace 会把该事实落成 `expected_check_mode`：`checked_vlm`、`disabled_by_flag`、`unavailable_no_vlm` 或 `empty`；消费方不应再根据 `model_backend` 或命令行参数猜测。
+若 expected 非空、VLM 可用但前序步骤中止，仍记录 `checked_vlm`，并在 `steps[]` 增加 `expected_check` 的 blocked 行；不能改写成 `empty`。
+
+`assert_toast` 只有在触发动作前已启动监听时才可作为 verified assertion；原子 CLI/MCP 单独断言会记录 `trigger_window_covered=false`，只能作为非验证性观察。`scroll_to.in` 的 `in` selector 先解析并直接使用唯一命中的容器节点，不再通过首次 DFS 重新选择。
 
 ## 4. 真机跑通命令（示例）
 

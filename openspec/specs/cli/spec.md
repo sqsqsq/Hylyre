@@ -99,3 +99,48 @@ The CLI SHALL expose `--failure-dir` on `hylyre run` and `hylyre run --steps-fil
 - **WHEN** no source flag is passed and zero or multiple devices are connected
 - **THEN** the command prints an actionable error listing the connected devices
 
+### Requirement: Shared planned-step result path
+
+The CLI SHALL route plan runs, `run --steps-file`, and atomic planned-step commands through the same planned-step dispatcher and scenario/report result model. CLI parsing SHALL not implement an alternate selector matcher, status model, or evidence ledger. `hylyre report verify` SHALL invoke the same trace/report contract validation used by other entry points.
+
+#### Scenario: Steps-file uses the shared ledger
+
+- **WHEN** `hylyre run --steps-file` executes a planned step
+- **THEN** the emitted case/trace contains a `StepResult` with the same selector, failure, and evidence semantics as a plan row
+
+#### Scenario: CLI rejects invalid match
+
+- **WHEN** a CLI planned JSON step contains `match:"typo"`
+- **THEN** it fails through the shared selector path and does not silently reinterpret the value
+
+### Requirement: CLI conformance entry
+
+The CLI SHALL retain working help and at least one production regression for wait, selector, verdict, and report/trace verification behavior, including `--failure-dir` propagation where the command supports it.
+
+#### Scenario: CLI regression reaches production code
+
+- **WHEN** the CLI test invokes a planned JSON step with a fake driver
+- **THEN** the assertion observes the production dispatcher/runner result, not a hand-built result object
+
+### Requirement: CLI planned-step and verification conformance
+
+CLI plan, steps-file, atomic planned-step, and report verification paths SHALL continue to use the shared dispatcher, ledger, selector contract, and verifier. At least one regression SHALL execute a real planned wait/selector/verdict path with a fake driver supplied at the driver boundary, and legacy verification output SHALL be explicit.
+
+#### Scenario: CLI production dispatcher is exercised
+
+- **WHEN** the CLI test runs a planned wait or selector with a deterministic fake driver
+- **THEN** the result is produced by the public planned dispatcher and contains typed selector/evidence fields rather than a hand-built result object
+
+#### Scenario: CLI reports legacy explicitly
+
+- **WHEN** `hylyre report verify` accepts a readable legacy trace
+- **THEN** its output identifies the trace as legacy and ineligible for new StepResult evidence claims
+
+### Requirement: Batch execution count excludes blocked ledger rows
+
+The CLI batch result SHALL retain blocked suffix rows in `results[]` but SHALL report `executed` as the number of planned operations actually dispatched before the abort.
+
+#### Scenario: Abort count remains actual
+
+- **WHEN** the first of two steps fails and the second is only represented as blocked
+- **THEN** the result reports `executed=1` and contains two result rows

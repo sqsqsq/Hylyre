@@ -49,7 +49,9 @@ def test_overlay_same_text_prefers_top_sheet() -> None:
         ),
     )
     tree = _node({"type": "Root", "bounds": "[0,0][1080,2400]"}, page_btn, sheet)
-    hit = resolve_one(tree, {"by_text": "下一步"})
+    hits = resolve_targets(tree, {"by_text": "下一步"})
+    assert len(hits) == 2
+    hit = hits[0]
     assert hit.center == (100, 1050)
     assert hit.overlay_rank >= 1
 
@@ -213,8 +215,7 @@ def test_pre_lift_in_container_sorts_clickable() -> None:
         _node({"type": "Text", "text": "项", "bounds": "[60,310][90,330]"}),
     )
     tree = _node({"type": "Root", "bounds": "[0,0][500,800]"}, scroll, plain, clickable)
-    hit = resolve_first_hit_match_center_in_container(
-        tree, {"by_text": "项"}, "[0,100][500,600]"
-    )
-    assert hit is not None
-    assert hit.center == (125, 320)
+    with pytest.raises(SelectorResolutionError, match="ambiguous"):
+        resolve_first_hit_match_center_in_container(
+            tree, {"by_text": "项"}, "[0,100][500,600]"
+        )

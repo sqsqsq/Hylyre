@@ -291,7 +291,7 @@ Hylyre 的「正确性」由 **Hylyre 自有的 L4+L5 自测试** 保证（详�
 输出格式由 `hylyre/contracts/output-schema.json` 与 `hylyre/contracts/report-sections.yaml` 定义：
 
 - **test-report.md** 必须含 `测试概览 / 测试执行结果（表格，状态 ∈ {通过,失败,阻塞,跳过}）/ 缺陷清单 / 通过率统计（P0/P1/P2 各通过率 + 总体）/ 结论（达标 | 有条件达标 | 不达标）`
-- **trace.json** 必须满足：`phase = "testing"`、`outcome ∈ {success, partial, failed, aborted}`、`tool_calls` / `retries` / `artifacts` 由 Hylyre 运行时自动记录、`model_backend` 由 host 注入（CLI 接受 `--model-backend`）
+- **trace.json** 必须满足：`schema_version = "0.3-p0"`、`phase = "testing"`、`outcome ∈ {success, partial, failed, aborted}`、每个 case 的 `steps[]` 完整唯一、`tool_calls` 由 `steps[]` 派生、`retries` / `artifacts` 由 Hylyre 运行时记录、`model_backend` 由 host 注入（CLI 接受 `--model-backend`）；旧 `0.1-p0`/`0.2-p4` 仅作 legacy 读取。
 
 framework 仓的 `trace.schema.json` 与 `testing-rules.yaml` 当前是兼容的事实标准，但 **不是 Hylyre 的 SSOT**。CI **`compat-framework.yml`** 执行 **`scripts/check_framework_schema.py`**：拉 consumer `trace.schema.json` 与本地 `output-schema.json` 做顶层字段软比对；**缺失时 stderr 告警**，并在 CI 内 **`pip install -e .` 后**尝试 **`docs/progress.md` 追加一条漂移记录**（同签名近尾部去重；可用 **`--no-append-progress`** 仅告警不写字）。**不阻塞主 CI / 不阻塞发布**——是否调整 Hylyre SSOT 由人评估后决定。
 

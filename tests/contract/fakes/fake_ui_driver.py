@@ -19,6 +19,9 @@ class FakeUiDriver(UiDriverBase):
     dump_tree: dict[str, Any] | None = None
     fail_touch_by_text: set[str] = field(default_factory=set)
     native_locate_by_text: dict[str, tuple[int, int]] = field(default_factory=dict)
+    toast_results: list[bool] = field(default_factory=list)
+    toast_unsupported: bool = False
+    toast_listening: bool = False
 
     async def connect(self) -> None:
         self.connected = True
@@ -55,27 +58,51 @@ class FakeUiDriver(UiDriverBase):
         y: int | None = None,
         by_text: str | None = None,
         by_id: str | None = None,
+        match: str | None = None,
         wait_time: float = 0.1,
     ) -> None:
+        from hylyre.api.selector_contract import normalize_match
+
+        normalize_match(match)
         self._validate_touch_kwargs(
             x=x, y=y, by_text=by_text, by_id=by_id
         )
-        if by_text is not None and by_text in self.fail_touch_by_text:
-            raise RuntimeError(f"Can't find component with [BY.text('{by_text}')]")
-        self.events.append(
-            (
-                "touch",
+        resolved_center: tuple[int, int] | None = None
+        if self.dump_tree is not None and (by_text is not None or by_id is not None):
+            from hylyre.api.selector_resolve import resolve_action_one
+
+            payload = await self.dump_ui()
+            hit = resolve_action_one(
+                payload["tree"],
                 {
-                    "x": x,
-                    "y": y,
-                    "by_text": by_text,
-                    "by_id": by_id,
-                    "wait_time": wait_time,
+                    key: value
+                    for key, value in {
+                        "by_text": by_text,
+                        "by_id": by_id,
+                        "match": match,
+                    }.items()
+                    if value is not None
                 },
             )
-        )
+            resolved_center = hit.center
+        if by_text is not None and by_text in self.fail_touch_by_text:
+            raise RuntimeError(f"Can't find component with [BY.text('{by_text}')]")
+        event = {
+            "x": x,
+            "y": y,
+            "by_text": by_text,
+            "by_id": by_id,
+            "wait_time": wait_time,
+        }
+        if match is not None:
+            event["match"] = match
+        if resolved_center is not None:
+            event["resolved_center"] = list(resolved_center)
+        self.events.append(("touch", event))
 
-    async def locate_by_text(self, *, by_text: str) -> tuple[int, int] | None:
+    async def locate_by_text(
+        self, *, by_text: str, match: str | None = None
+    ) -> tuple[int, int] | None:
         text = str(by_text)
         if text in self.native_locate_by_text:
             return self.native_locate_by_text[text]
@@ -87,7 +114,7 @@ class FakeUiDriver(UiDriverBase):
         from hylyre.api.selector_resolve import resolve_one
 
         try:
-            hit = resolve_one(tree, {"by_text": text})
+            hit = resolve_one(tree, {"by_text": text, "match": match})
         except SelectorResolutionError:
             return None
         return hit.center
@@ -98,21 +125,39 @@ class FakeUiDriver(UiDriverBase):
         *,
         by_text: str | None = None,
         by_id: str | None = None,
+        match: str | None = None,
         mode: Any | None = None,
     ) -> None:
+        from hylyre.api.selector_contract import normalize_match
+
+        normalize_match(match)
         if by_text is not None and by_id is not None:
             raise ValueError("pass at most one of by_text or by_id")
-        self.events.append(
-            (
-                "input_text",
+        if self.dump_tree is not None and (by_text is not None or by_id is not None):
+            from hylyre.api.selector_resolve import resolve_action_one
+
+            payload = await self.dump_ui()
+            resolve_action_one(
+                payload["tree"],
                 {
-                    "text": text,
-                    "by_text": by_text,
-                    "by_id": by_id,
-                    "mode": mode,
+                    key: value
+                    for key, value in {
+                        "by_text": by_text,
+                        "by_id": by_id,
+                        "match": match,
+                    }.items()
+                    if value is not None
                 },
             )
-        )
+        event = {
+            "text": text,
+            "by_text": by_text,
+            "by_id": by_id,
+            "mode": mode,
+        }
+        if match is not None:
+            event["match"] = match
+        self.events.append(("input_text", event))
 
     async def screenshot(self) -> bytes:
         self.events.append(("screenshot", {}))
@@ -153,12 +198,16 @@ class FakeUiDriver(UiDriverBase):
         area_by_id: str | None = None,
         area_by_type: str | None = None,
         area_by_key: str | None = None,
+        area_match: str | None = None,
         area_scrollable: bool | None = None,
         side: str | None = None,
         start_point: tuple[float | int, float | int] | None = None,
         swipe_time: float = 0.3,
         speed: int | None = None,
     ) -> None:
+        from hylyre.api.selector_contract import normalize_match
+
+        normalize_match(area_match)
         self.events.append(
             (
                 "swipe",
@@ -169,6 +218,7 @@ class FakeUiDriver(UiDriverBase):
                     "area_by_id": area_by_id,
                     "area_by_type": area_by_type,
                     "area_by_key": area_by_key,
+                    "area_match": area_match,
                     "area_scrollable": area_scrollable,
                     "side": side,
                     "start_point": start_point,
@@ -189,10 +239,14 @@ class FakeUiDriver(UiDriverBase):
         at_by_id: str | None = None,
         at_by_type: str | None = None,
         at_by_key: str | None = None,
+        at_match: str | None = None,
         at_scrollable: bool | None = None,
         key1: int | None = None,
         key2: int | None = None,
     ) -> None:
+        from hylyre.api.selector_contract import normalize_match
+
+        normalize_match(at_match)
         self.events.append(
             (
                 "mouse_scroll",
@@ -205,6 +259,7 @@ class FakeUiDriver(UiDriverBase):
                     "at_by_id": at_by_id,
                     "at_by_type": at_by_type,
                     "at_by_key": at_by_key,
+                    "at_match": at_match,
                     "at_scrollable": at_scrollable,
                     "key1": key1,
                     "key2": key2,
@@ -253,6 +308,7 @@ class FakeUiDriver(UiDriverBase):
         by_id: str | None = None,
         by_type: str | None = None,
         by_key: str | None = None,
+        match: str | None = None,
         timeout: float = 10.0,
     ) -> None:
         self.events.append(
@@ -263,10 +319,47 @@ class FakeUiDriver(UiDriverBase):
                     "by_id": by_id,
                     "by_type": by_type,
                     "by_key": by_key,
+                    "match": match,
                     "timeout": timeout,
                 },
             )
         )
+        if self.dump_tree is not None:
+            from hylyre.api.selector_resolve import resolve_targets
+            from hylyre.api.selector_contract import selector_evidence
+
+            pred = {
+                k: v
+                for k, v in {
+                    "by_text": by_text,
+                    "by_id": by_id,
+                    "by_type": by_type,
+                    "by_key": by_key,
+                    "match": match,
+                }.items()
+                if v is not None
+            }
+            payload = await self.dump_ui()
+            hits = resolve_targets(payload["tree"], pred)
+            if not hits:
+                from hylyre.api.exceptions import SelectorResolutionError
+
+                raise SelectorResolutionError(
+                    f"wait_for timeout for selector {pred!r} after {timeout}s",
+                    selector=selector_evidence(
+                        pred, engine="fake", candidate_count=0
+                    ),
+                )
+            return {
+                "selector": selector_evidence(
+                    pred,
+                    engine="fake",
+                    candidate_count=len(hits),
+                    selected_id=hits[0].id or None,
+                    bounds=hits[0].tap_bounds,
+                ),
+                "evidence": {"assertion": "presence", "observed_present": True},
+            }
 
     async def wait_for_selector_gone(
         self,
@@ -275,6 +368,7 @@ class FakeUiDriver(UiDriverBase):
         by_id: str | None = None,
         by_type: str | None = None,
         by_key: str | None = None,
+        match: str | None = None,
         timeout: float = 10.0,
     ) -> None:
         self.events.append(
@@ -285,10 +379,51 @@ class FakeUiDriver(UiDriverBase):
                     "by_id": by_id,
                     "by_type": by_type,
                     "by_key": by_key,
+                    "match": match,
                     "timeout": timeout,
                 },
             )
         )
+        if self.dump_tree is not None:
+            from hylyre.api.selector_resolve import resolve_targets
+            from hylyre.api.selector_contract import selector_evidence
+            from hylyre.api.exceptions import AssertionMismatch
+
+            pred = {
+                k: v
+                for k, v in {
+                    "by_text": by_text,
+                    "by_id": by_id,
+                    "by_type": by_type,
+                    "by_key": by_key,
+                    "match": match,
+                }.items()
+                if v is not None
+            }
+            payload = await self.dump_ui()
+            hits = resolve_targets(payload["tree"], pred)
+            if hits:
+                raise AssertionMismatch(
+                    f"wait_gone timeout for selector {pred!r} after {timeout}s",
+                    selector=selector_evidence(
+                        pred, engine="fake", candidate_count=len(hits)
+                    ),
+                    evidence={
+                        "assertion": "absence",
+                        "observed_present": True,
+                        "candidate_count": len(hits),
+                    },
+                )
+            return {
+                "selector": selector_evidence(
+                    pred, engine="fake", candidate_count=0
+                ),
+                "evidence": {
+                    "assertion": "absence",
+                    "observed_present": False,
+                    "candidate_count": 0,
+                },
+            }
 
     async def wait_for_idle(
         self,
@@ -311,7 +446,7 @@ class FakeUiDriver(UiDriverBase):
         fuzzy: str = "equal",
         poll_interval: float = 0.3,
         on_unsupported: str = "error",
-    ) -> None:
+    ) -> dict[str, Any]:
         self.events.append(
             (
                 "assert_toast",
@@ -324,3 +459,31 @@ class FakeUiDriver(UiDriverBase):
                 },
             )
         )
+        if self.toast_unsupported:
+            from hylyre.api.exceptions import CapabilityUnsupported, StepSkipped
+
+            if on_unsupported == "skip":
+                raise StepSkipped("fake Toast capability unsupported")
+            raise CapabilityUnsupported("fake Toast capability unsupported")
+        result = self.toast_results.pop(0) if self.toast_results else True
+        return {
+            "channel": "fake.toast",
+            "listener_started": self.toast_listening,
+            "expected_text": text,
+            "result": result,
+        }
+
+    async def start_toast_listening(self) -> dict[str, Any]:
+        if self.toast_unsupported:
+            from hylyre.api.exceptions import CapabilityUnsupported
+
+            raise CapabilityUnsupported(
+                "fake Toast capability unsupported",
+                evidence={
+                    "channel": "fake.toast",
+                    "listener_started": False,
+                },
+            )
+        self.toast_listening = True
+        self.events.append(("start_toast_listening", {}))
+        return {"channel": "fake.toast", "listener_started": True}

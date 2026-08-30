@@ -5,6 +5,8 @@ Hylyre 尚未在公共 PyPI 发布；若下游 **framework** 无法从 GitHub �
 - **wheel 模式**（schema 1）：单一纯 Python wheel（`py3-none-any`）；
 - **明文源码树模式**（schema 2，`--source`）：`src/` 源码目录，供**禁止提交 `.whl` / `.tar.gz` 等二进制归档**的公司仓库使用（Hylyre 包本体全部是文本文件），见下文「[明文源码树发布](#明文源码树发布schema-2)」。
 
+0.4.0 的最低接入版本为 `hylyre>=0.4.0`，运行证据使用 trace schema `0.3-p0`；下游应先校验 `CaseResult.steps[]`、`expected_check_mode` 和 `failure_kind/failure_code`，再消费兼容的 `status`/`tool_calls` 投影。迁移说明见 [`migration-0.4.md`](migration-0.4.md)。
+
 ## 何时运行
 
 - 本仓 **bump** `pyproject.toml` 的 `version` 后；

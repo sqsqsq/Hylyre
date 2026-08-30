@@ -6,31 +6,17 @@ FastMCP 薄封装：少量原子 tool 映射 CLI 能力，控制 schema/token �
 ## Requirements
 ### Requirement: MCP thin wrapper
 
-The system SHALL expose `hylyre mcp serve` wiring a curated tool set (**≤9**) mirroring CLI subsets, using the same implementations as Typer commands where applicable (shared `hylyre.cli.commands.*` and `run_cmd.execute_*`).
+The MCP wrapper SHALL expose the curated tool set (at most the existing nine curated tools in the minimal server surface, with the current extended Tier-A/session tools retained where configured) while delegating plan, steps, selector, verdict, and report behavior to the same CLI/scenario/planned-step implementations. It SHALL not define a second selector resolver, result ledger, or case status model. MCP serialization SHALL preserve `CaseResult.steps[]`, typed failure fields, expected-check mode, and evidence in emitted artifacts.
 
-#### Scenario: Tools list
+#### Scenario: MCP fake run has the same contract
 
-- GIVEN `fastmcp` is installed (`pip install 'hylyre[mcp]'` or the `dev` extra)
-- WHEN tests load `build_mcp()` and call `list_tools()`
-- THEN exactly nine tools exist: `hylyre_run_plan`, `hylyre_report_verify`, `hylyre_device_list`, `hylyre_doctor`, `hylyre_ai_action`, `hylyre_ai_query`, `hylyre_ai_assert`, `hylyre_mock_activate`, `hylyre_progress_show`
+- **WHEN** an MCP client invokes `hylyre_run_plan` in fake mode and then `hylyre_report_verify`
+- **THEN** the artifacts pass the new trace/report contract with the same case/step semantics as CLI execution
 
-#### Scenario: Stdio server entry
+#### Scenario: MCP invalid selector is fail-closed
 
-- GIVEN a developer runs `hylyre mcp serve --help`
-- WHEN the command parses
-- THEN help describes the server and optional `--show-banner` and `--transport` (stdio only)
-
-#### Scenario: Fake run parity
-
-- GIVEN the e2e fixture `tests/e2e/fixtures/mock-test-plan.md`
-- WHEN an MCP client calls `hylyre_run_plan` with `use_fakes=true` and then `hylyre_report_verify`
-- THEN both tools succeed and artifacts pass L5 verification
-
-#### Scenario: Progress excerpt
-
-- GIVEN the Hylyre repo checkout is cwd (or discoverable via `pyproject.toml`)
-- WHEN an MCP client calls `hylyre_progress_show` with a small `tail_lines`
-- THEN the tool returns a string containing `docs/progress.md` path and file tail (or missing-file hint)
+- **WHEN** an MCP planned-step tool receives `match:"starts_with"`
+- **THEN** shared execution returns a selector-contract failure rather than a contains match
 
 ### Requirement: MCP scroll_to tool and failure_dir passthrough
 
@@ -46,3 +32,25 @@ The MCP wrapper SHALL register `hylyre_run_scroll_to` mirroring the `scroll_to` 
 - **WHEN** the batch (`hylyre_run_steps`) or generic step-dispatch tool is called with `failure_dir`
 - **THEN** on step failure the dump/screenshot artifacts are written under that directory, matching CLI behavior
 
+### Requirement: MCP planned-step conformance
+
+The MCP wrapper SHALL provide at least one production regression for a planned wait/selector/verdict path and SHALL pass batch/generic step calls through the shared dispatcher, including typed skips and failure evidence. Any supported `failure_dir` parameter SHALL follow the same session path as the CLI.
+
+#### Scenario: MCP batch preserves typed skip
+
+- **WHEN** a batch step raises `StepSkipped`
+- **THEN** the returned/emitted result is `skipped` with its failure kind/code and is not converted to a generic error
+
+### Requirement: MCP planned-step conformance uses the production dispatcher
+
+MCP planned wait/selector/verdict and batch paths SHALL invoke the same public planned dispatcher and result ledger as CLI execution. MCP SHALL preserve typed capability skips, selector failures, expected-check modes, and evidence; it SHALL not use a fake plan stub as its only conformance proof.
+
+#### Scenario: MCP regression reaches shared planned execution
+
+- **WHEN** an MCP conformance test invokes a planned wait or selector with a deterministic fake driver at the driver boundary
+- **THEN** the returned StepResult is produced by the shared dispatcher with the same selector and verdict semantics as the CLI path
+
+#### Scenario: MCP preserves a Toast capability skip
+
+- **WHEN** a batch trigger is followed by a Toast assertion with `on_unsupported="skip"`
+- **THEN** MCP returns the trigger row plus a typed skipped capability assertion row and does not convert it to a generic failed error

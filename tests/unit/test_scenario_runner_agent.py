@@ -38,7 +38,7 @@ async def test_run_on_agent_json_step_no_vlm(tmp_path: Path) -> None:
         )
     finally:
         await ag.aclose()
-    assert r.case_results[0].status == "通过"
+    assert r.case_results[0].status == "跳过"
     assert any(e[0] == "touch" and e[1].get("by_id") == "btn" for e in ui.events)
 
 
@@ -59,7 +59,7 @@ async def test_run_on_agent_swipe_root_step(tmp_path: Path) -> None:
         )
     finally:
         await ag.aclose()
-    assert r.case_results[0].status == "通过"
+    assert r.case_results[0].status == "跳过"
     assert any(e[0] == "swipe" for e in ui.events)
 
 
@@ -77,7 +77,7 @@ async def test_run_on_agent_nl_step_needs_vlm(tmp_path: Path) -> None:
         r = await runner.run_plan_on_agent(ag, plan, feature="feat", check_expected=False)
     finally:
         await ag.aclose()
-    assert r.case_results[0].status == "失败"
+    assert r.case_results[0].status == "阻塞"
     assert "VLM" in r.case_results[0].notes
 
 
@@ -89,14 +89,14 @@ async def test_run_on_agent_nl_with_vlm(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     ui = FakeUiDriver()
-    vlm = FakeVlmClient(responses=[{"action": {"type": "touch", "by_text": "OK"}}])
+    vlm = FakeVlmClient(responses=[{"action": {"type": "touch", "x": 10, "y": 20}}])
     ag = HylyreAgent(ui=ui, vlm=vlm)
     runner = ScenarioRunner(use_fakes=False)
     try:
         r = await runner.run_plan_on_agent(ag, plan, feature="feat", check_expected=False)
     finally:
         await ag.aclose()
-    assert r.case_results[0].status == "通过"
+    assert r.case_results[0].status == "跳过"
     assert vlm.calls
 
 
@@ -132,7 +132,7 @@ async def test_run_plan_on_agent_passes_page_name_to_start_app(tmp_path: Path) -
 @pytest.mark.asyncio
 async def test_run_on_agent_backtick_json_step_no_vlm(tmp_path: Path) -> None:
     plan = tmp_path / "p.md"
-    step = '`{"touch":{"by_text":"OK"}}`'
+    step = '`{"touch":{"x":10,"y":20}}`'
     plan.write_text(
         _PLAN_TABLE + f"| TC-BT | n |  | {step} |  | P0 | AC-BT |\n",
         encoding="utf-8",
@@ -146,7 +146,7 @@ async def test_run_on_agent_backtick_json_step_no_vlm(tmp_path: Path) -> None:
         )
     finally:
         await ag.aclose()
-    assert r.case_results[0].status == "通过"
+    assert r.case_results[0].status == "跳过"
     assert any(e[0] == "touch" for e in ui.events)
 
 
@@ -167,7 +167,7 @@ async def test_run_on_agent_fence_json_step(tmp_path: Path) -> None:
     finally:
         await ag.aclose()
     assert any(e[0] == "press_back" for e in ui.events)
-    assert log and log[0]["kind"] == "planned_json"
+    assert log == []
 
 
 @pytest.mark.asyncio
@@ -186,7 +186,7 @@ async def test_run_on_agent_broken_json_friendly_error(tmp_path: Path) -> None:
         )
     finally:
         await ag.aclose()
-    assert r.case_results[0].status == "失败"
+    assert r.case_results[0].status == "阻塞"
     assert "JSON 语法错误" in r.case_results[0].notes
     assert "TC-BR" in r.case_results[0].notes
 
@@ -214,3 +214,5 @@ async def test_run_on_agent_expected_assert(tmp_path: Path) -> None:
         await ag.aclose()
     assert r.case_results[0].status == "通过"
     assert len(vlm.calls) == 2
+    assert r.case_results[0].expected_check_mode == "checked_vlm"
+    assert r.case_results[0].steps[-1].role == "assertion"

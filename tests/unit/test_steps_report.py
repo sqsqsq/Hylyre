@@ -29,9 +29,8 @@ def test_steps_batch_to_scenario_result_maps_cases() -> None:
     assert result.feature == "wallet-x"
     assert len(result.case_results) == 2
     assert result.case_results[0].case.case_id == "STEP-000"
-    assert result.case_results[0].status == "通过"
+    assert result.case_results[0].status == "跳过"
     assert result.case_results[1].status == "失败"
     assert "not found" in result.case_results[1].notes
-    assert result.tool_calls[0]["kind"] == "start_app"
-    assert result.tool_calls[0]["page_name"] == "MainAbility"
+    assert result.tool_calls[0]["kind"] == "touch"
     assert result.case_results[0].case.ac_ref == "AC-000"

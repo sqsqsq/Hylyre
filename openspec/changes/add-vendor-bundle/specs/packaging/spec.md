@@ -29,6 +29,16 @@ The repository SHALL provide `scripts/build_wheel.py` invoked from the **reposit
 
 The repository SHALL provide `scripts/build-wheel.ps1` and `scripts/build-wheel.sh` that delegate to `build_wheel.py` with forwarded arguments.
 
+#### Scenario: wrapper forwards arguments
+
+- **WHEN** a maintainer invokes either platform wrapper with build arguments
+- **THEN** it invokes `scripts/build_wheel.py` and forwards those arguments unchanged
+
 ### Requirement: documentation
 
 The repository SHALL document the workflow in `docs/framework-vendor-bundle.md` (build, verify, copy to downstream vendor, example `pip install` with extras).
+
+#### Scenario: vendor workflow is documented
+
+- **WHEN** a maintainer reads `docs/framework-vendor-bundle.md`
+- **THEN** the document contains build, verify, copy, and install guidance

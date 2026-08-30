@@ -23,9 +23,9 @@ async def test_run_steps_three_touch_ok() -> None:
     ui = FakeUiDriver()
     agent = HylyreAgent(ui=ui, vlm=None)
     steps_arr = [
-        {"touch": {"by_text": "a"}},
-        {"touch": {"by_text": "b"}},
-        {"touch": {"by_text": "c"}},
+        {"touch": {"x": 1, "y": 1}},
+        {"touch": {"x": 2, "y": 2}},
+        {"touch": {"x": 3, "y": 3}},
     ]
     result = await steps_cmd.run_steps_on_agent(agent, steps_arr, on_fail="abort")
     assert result["total"] == 3
@@ -70,7 +70,7 @@ async def test_run_steps_abort_on_second_error(monkeypatch: pytest.MonkeyPatch) 
 
     monkeypatch.setattr(ui, "touch", boom_touch)
 
-    steps_arr = [{"touch": {"by_text": "a"}}, {"touch": {"by_text": "b"}}]
+    steps_arr = [{"touch": {"x": 1, "y": 1}}, {"touch": {"x": 2, "y": 2}}]
     result = await steps_cmd.run_steps_on_agent(agent, steps_arr, on_fail="abort")
     assert result["total"] == 2
     assert result["executed"] == 2
@@ -114,9 +114,9 @@ async def test_run_steps_skip_continues(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(ui, "touch", boom_touch)
 
     steps_arr = [
-        {"touch": {"by_text": "a"}},
-        {"touch": {"by_text": "b"}},
-        {"touch": {"by_text": "c"}},
+        {"touch": {"x": 1, "y": 1}},
+        {"touch": {"x": 2, "y": 2}},
+        {"touch": {"x": 3, "y": 3}},
     ]
     result = await steps_cmd.run_steps_on_agent(agent, steps_arr, on_fail="skip")
     assert result["executed"] == 3
@@ -163,7 +163,7 @@ def test_execute_run_steps_start_app_via_patch(
     )
 
     out = steps_cmd.execute_run_steps(
-        [{"touch": {"by_text": "x"}}],
+        [{"touch": {"x": 1, "y": 1}}],
         device_sn=None,
         session_file=None,
         on_fail="abort",

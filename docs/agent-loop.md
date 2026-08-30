@@ -207,15 +207,15 @@ MCP：**`hylyre_run_scroll_to`**（payload 根键须含 `scroll_to` 或整步对
 
 ## 富选择器语义（Agent 必读）
 
-**`by_text` 默认**走 **`dump-ui` + `resolve_targets` + 坐标点击**（不用「原生先行再兜底」——同名按钮在半模态场景下原生会静默点到背后项）。**`x`/`y`/`by_id`** 仍走 Hypium 原生；**`by_key`** 走解析器坐标。
+**`by_text` 默认**走 **`dump-ui` + `resolve_targets` + 坐标点击**（同名按钮不会静默点到背后项）。**`x`/`y`/`by_id`** 仍走 Hypium 原生；**`by_key`** 走解析器坐标。
 
-排序：**overlay 越靠上越优先** → **`clickable`** → **`enabled`** → 树序。多命中时默认取第一个，并写 **候选摘要** 到日志/`SelectorResolutionError`。
+排序：**overlay 越靠上越优先** → **`clickable`** → **`enabled`** → 树序。排序只用于可观察候选顺序；action 多命中时 fail-closed 为 `selector_ambiguous`，并写 **候选摘要** 到 `SelectorResolutionError`。只有显式 `index`/`scope`/`within`/`all` 能消歧。
 
-- **文本抬升**：匹配到 `Text` 叶节点后，向上找最近 **`clickable=true` 或 `enabled` 祖先** 作为点击目标。
+- **文本抬升**：普通 Text 叶节点可向上找最近 **`clickable=true`**（再 bounded enabled）祖先；聚合富文本片段没有真实 bounds/semantic action 时不得抬升点击父 Text/Row。
 - **`all` (AND)**：`by_text` 先抬升，再对抬升后的目标应用 `by_type`/`clickable` 等谓词。
 - **`scope:"top_overlay"`**：启发式取最上层 Sheet/Dialog/Popup 子树（HarmonyOS `bindSheet` 场景）。
 - **`wait_for` / `wait_gone`**：含富字段时轮询 dump+解析；纯单属性仍走 Hypium `wait_for_component`。
-- **`input`**（0.3.0+）：`by_type`/`by_key`/富字段或 **`into`** → 解析 → **touch 聚焦** → **当前光标输入**；仅 `by_text`/`by_id`（无富字段）走原生；无选择器时落当前聚焦框。
+- **`input`**（0.4.0+）：`by_text`、`by_type`/`by_key`/富字段或 **`into`** → 统一解析 → **touch 聚焦** → **当前光标输入**；`by_id` 可走原生；无选择器时落当前聚焦框。所有文本 selector 都显式遵循 `exact`/`contains`。
 
 逃生：**`prefer_native_text:true`** 恢复旧 `by_text` 原生行为。
 
@@ -223,13 +223,17 @@ MCP：**`hylyre_run_scroll_to`**（payload 根键须含 `scroll_to` 或整步对
 
 ## Toast 断言与「跳过」
 
-**`assert_toast`** 在本层自有轮询，并捕获 Hypium **`check_toast`** 异常，避免失败截图路径 **`NoneType`** 崩溃。
+**`assert_toast`** 必须在触发动作前启动监听；plan / `run --steps-file` 会对相邻的触发动作做 lookahead，driver 轮询 Hypium **`check_toast`** 的真实布尔返回，并禁用底层失败截图的空路径副作用。`False`/未出现是 assertion mismatch，已知能力不支持才是 capability。单独的原子 CLI/MCP `assert_toast` 没有可包围的触发动作，证据会记录 `trigger_window_covered=false`；要验证“动作触发 Toast”，请把动作和 Toast 断言放在同一计划或 batch 中。
 
 ```json
 {"assert_toast":{"text":"操作成功","timeout":3,"on_unsupported":"skip","poll_interval":0.3}}
 ```
 
-**`on_unsupported":"skip"`** 时抛 **`StepSkipped`**，全链路（plan / `--steps-file` / MCP batch）映射为 **「跳过」**，**`resolved_outcome` 不计失败**（与 [`report-sections.yaml`](../hylyre/contracts/report-sections.yaml) 一致）。
+**`on_unsupported":"skip"`** 时抛 **`StepSkipped`**，全链路（plan / `--steps-file` / MCP batch）映射为 **「跳过」**；跳过不冒充 assertion pass，全 skipped/inconclusive run 也不投影为成功。
+
+监听器启动失败只有在确认为 capability unsupported 且下一条 Toast 断言明确要求 `skip` 时才会跳过 Toast 断言；其它真实 driver/framework 异常仍按原始 failure 分类中止，不能被 `skip` 吞掉。
+
+Tier-A 原子 CLI/MCP planned-step 现在返回同一 `StepResult` JSON；`skipped` 的 capability 结果为成功退出但保留 typed 字段，`failed/blocked` 保持非零退出或结构化错误。它们仍不能为已经发生的前置动作补造 Toast trigger-window 证据。
 
 ## 步骤失败诊断（`--failure-dir`）
 

@@ -97,3 +97,27 @@
 - **`add-driver-lyrebird`** → `openspec/changes/archive/2026-05-11-add-driver-lyrebird/`；`driver-lyrebird` 规范合并至主 specs。
 - **`add-api-agent`** → `openspec/changes/archive/2026-05-11-add-api-agent/`；`api-agent` 规范见 `openspec/specs/api-agent/spec.md`。
 - **`add-cert-bootstrap`** → `openspec/changes/archive/2026-05-12-add-cert-bootstrap/`；`cert-bootstrap` 规范见 `openspec/specs/cert-bootstrap/spec.md`。
+
+## 2026-08-30 · 确定性验证、Selector 语义与证据完整性
+
+- **OpenSpec**：`deterministic-verification-selector-evidence`；先通过 strict validation，再实施生产代码、测试和文档。完成后合并至 `openspec/specs/{api-agent,driver-hypium,scenario-runner,contracts,cli,mcp-wrapper,selector-resolution}/`。
+- **契约**：trace schema `0.3-p0`；`CaseResult.steps[]` 是唯一证据真源，`tool_calls`/Markdown 为派生投影；新增 execution/verification/evidence、expected-check 四态、StepResult 两级失败分类和环境/selector 证据。
+- **语义**：Hypium wait 返回值、Toast 预监听与布尔结果、exact/contains、action 多候选、聚合富文本 fail-closed 已覆盖 fake/native/resolver 回归。
+- **版本/迁移**：推荐 Hylyre `0.4.0`（0.x minor 级行为收紧）；见 `CHANGELOG.md`、`docs/deterministic-verification.md`、`docs/migration-0.4.md`。真机复验项仍 pending，不以 fake 结果冒充。
+
+## 2026-08-30 · Review hardening follow-up
+
+- **Follow-up OpenSpec**：`deterministic-verification-selector-evidence-hardening` 先通过 strict validation；修复 review 反例后再合并 canonical specs。
+- **收口**：aborted/skipped/empty-evidence 不再 verified pass；abort 后完整保留 blocked StepResult；selector 约束、多候选 swipe/scroll、rich-text 和 Toast capability skip 均 fail-closed/typed。
+- **入口与证据**：新增真实 plan、CLI steps-file、MCP session-batch dispatcher 回归；trace selector 字段收紧，legacy verifier 输出显式标识，敏感 selector/error/notes 脱敏。
+- **发布验证**：`dist/release-src/release.manifest.json`：schema `2`、version `0.4.0`、file count `82`、total bytes `537857`、tree hash `545d519edab6ef3ec9694c2fc9040de7975703bf641a57b7bd03ff4ff3812512`；build 与 `--verify` 均通过。
+
+## 2026-08-30 · Final review hardening
+
+- **剩余阻断已闭环**：Toast trigger-window 未覆盖不可 verified；显式标识为 inline target 的原始聚合 Text（含 `all[]`）fail-closed；普通动态 Row `contains` 保持可寻址；nested match 贯穿执行与证据；`scroll_to.in` 使用 resolver 选中的容器节点。
+- **兼容修复**：blocked suffix 保留根因 `failure_kind/failure_code`，`executed` 只计实际 dispatch，完整 ledger 仍保留 blocked rows。
+
+## 2026-08-30 · Inline-target contract correction
+
+- **OpenSpec**：`deterministic-verification-inline-contract` 已通过 strict validation，canonical `selector-resolution`/`api-agent` 已同步并归档至 `openspec/changes/archive/2026-08-30-deterministic-verification-inline-contract/`。
+- **语义修正**：移除 generic Row/ancestor 富文本启发式，恢复普通动态 Text/Row `contains`；聚合富文本 fixture 改用明确的 host `inline_target=true` signal，并覆盖正常 Row 对冲场景。
