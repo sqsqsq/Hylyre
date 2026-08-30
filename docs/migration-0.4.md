@@ -1,10 +1,10 @@
 # Migration to Hylyre 0.4.0
 
-0.4.0 is the recommended next version because the change tightens observable behavior across the 0.x API and prevents historical false passes. It is a minor-version recommendation under the repository's 0.x policy; no package is published as part of this change.
+0.4.0 introduced the tightened observable behavior across the 0.x API and prevention of historical false passes. The current recommended patch release is 0.4.1, which also fixes structured selector identity redaction; no package is published as part of the historical 0.4.0 migration.
 
 ## Consumers
 
-- Require Hylyre `>=0.4.0` and trace schema `0.3-p0` before consuming verification evidence.
+- Require Hylyre `>=0.4.1` and trace schema `0.3-p0` before consuming verification evidence.
 - Read `cases[].steps[]` as the source of truth. `tool_calls` is only a compatibility projection and must not be maintained separately.
 - Route first on `failure_kind`, then on `failure_code`; do not parse `error`.
 - Treat `verification=inconclusive` and `evidence=incomplete` as not verified. Do not turn `unavailable_no_vlm` or `disabled_by_flag` into a checked expected result.
@@ -24,7 +24,7 @@ Old plans continue to parse. Plans that relied on an omitted native exact defaul
 
 For Toast, place the triggering action immediately before the Toast assertion in a plan or `run_steps` batch so the runner can pre-listen. An atomic CLI/MCP `assert_toast` has no prior trigger to bracket and records `trigger_window_covered=false`; it must not be used as evidence that an earlier atomic action produced a Toast. Unsupported capability with `on_unsupported=skip` is a typed skipped assertion; a supported false/not-found result is an assertion mismatch.
 
-Trace/report and batch human text is redacted for selector text, account/amount-like values, errors, and notes. Consumers must use the structured selector fields and failure codes for diagnostics.
+Trace/report and batch human text is redacted for selector text, account/amount-like values, errors, and notes. Structured selector identity fields (`by_id`, `by_key`, `id`, `key`, `selected_id`) remain verbatim for machine comparison. Consumers must use the structured selector fields and failure codes for diagnostics.
 
 ## Handoff and real-device checklist
 

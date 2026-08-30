@@ -1,6 +1,6 @@
 # Deterministic verification and evidence contract
 
-Hylyre 0.4.0 is the deterministic execution and evidence layer. Maison remains responsible for acceptance coverage, P0/quality axes, visual checks, and release verdicts.
+Hylyre 0.4.1 is the current deterministic execution and evidence layer. It preserves structured selector identity fields for machine comparison while continuing to redact user-facing text and values. Maison remains responsible for acceptance coverage, P0/quality axes, visual checks, and release verdicts.
 
 ## One evidence chain
 
@@ -51,7 +51,7 @@ Aggregate rich text is not clickable evidence. Because a normal dynamic Row and 
 
 Hypium wait adapters consume the documented return contracts: `wait_for_component` must return a component, while `wait_for_component_disappear` must return `None`. Errors include the selector and timeout. Toast plans/batches start listening before the trigger action; `check_toast` must return boolean true. False/not-found is `assertion_mismatch`; recognized unsupported capability is `capability_unsupported` or a typed skip when `on_unsupported=skip`. A standalone atomic CLI/MCP `assert_toast` has no trigger action to bracket: its evidence records `trigger_window=assertion_only` and `trigger_window_covered=false`; use an adjacent trigger + Toast assertion in a plan or `run_steps` for trigger-window coverage.
 
-Trace `environment` records Hylyre version, Hypium version or `unavailable`, trace schema version, and selector engine. New-schema selector objects require `engine`, `requested_match`, `effective_match`, and `candidate_count`; nested `all[]` text match is the recorded effective match. Verifier checks case/step uniqueness and projection equality. Schema `0.1-p0`/`0.2-p4` is explicitly labeled `legacy` and is readable only as compatibility data, not new StepResult evidence. Evidence values likely to contain account, amount, credential, selector text, human error, or notes are redacted at serialization.
+Trace `environment` records Hylyre version, Hypium version or `unavailable`, trace schema version, and selector engine. New-schema selector objects require `engine`, `requested_match`, `effective_match`, and `candidate_count`; nested `all[]` text match is the recorded effective match. Verifier checks case/step uniqueness and projection equality. Schema `0.1-p0`/`0.2-p4` is explicitly labeled `legacy` and is readable only as compatibility data, not new StepResult evidence. Structured selector identity fields (`by_id`, `by_key`, `id`, `key`, `selected_id`) are retained verbatim; evidence values likely to contain account, amount, credential, selector text, human error, or notes are redacted at serialization.
 
 The deterministic aggregate-rich-text fixture is [`tests/fixtures/rich_text_aggregate_dump.json`](../tests/fixtures/rich_text_aggregate_dump.json). It models ordinary and clickable conceptual spans while the host dump contains only one aggregate Text node and the explicit `inline_target=true` host signal; the resolver must return `inline_target_unresolvable` and issue no parent-center touch. The paired regression covers an ordinary dynamic Row `contains` without that signal. This fixture is not a real ArkUI device acceptance.
 

@@ -66,10 +66,23 @@ _SENSITIVE_TEXT_PATTERNS = (
     re.compile(r"(?<![\w])[0-9][0-9,]{5,}(?![\w])"),
 )
 
+# These are structured selector association keys.  Their values identify a
+# canonical UI target and must remain comparable in serialized evidence.
 _SELECTOR_VALUE_KEYS = frozenset({"by_id", "by_key", "id", "key", "selected_id"})
-_SENSITIVE_SCALAR_RE = re.compile(
-    r"(?i)(?:account|账号|amount|金额|余额|phone|手机号|card|卡号|token|secret|password)|"
-    r"(?<![\w])[0-9][0-9,]{5,}(?![\w])"
+# Bounds are machine evidence too, not user-facing text.
+_STRUCTURED_SCALAR_KEYS = frozenset({"bounds"})
+_STRUCTURED_VALUE_KEYS = _SELECTOR_VALUE_KEYS | _STRUCTURED_SCALAR_KEYS
+_SENSITIVE_VALUE_KEYS = frozenset(
+    {
+        "text",
+        "value",
+        "instruction",
+        "answer",
+        "expected",
+        "actual",
+        "by_text",
+        "by_value",
+    }
 )
 
 
@@ -88,13 +101,14 @@ def redact_evidence(value: Any, *, key: str = "") -> Any:
     """Redact likely sensitive evidence before it reaches a trace/report."""
 
     lowered = key.lower()
-    if (
-        lowered in _SELECTOR_VALUE_KEYS
-        and isinstance(value, str)
-        and _SENSITIVE_SCALAR_RE.search(value)
+    if lowered in _STRUCTURED_VALUE_KEYS and (
+        value is None or isinstance(value, str)
     ):
-        return "[REDACTED]"
-    if lowered in {"text", "value", "instruction", "answer", "by_text", "by_value"} or any(
+        # Structured selector fields are machine evidence, not user text.
+        # Unexpected containers fall through to recursive handling below so
+        # nested text/value fields still redact.
+        return value
+    if lowered in _SENSITIVE_VALUE_KEYS or any(
         part in lowered for part in _SENSITIVE_KEY_PARTS
     ):
         return "[REDACTED]"
@@ -104,9 +118,13 @@ def redact_evidence(value: Any, *, key: str = "") -> Any:
             for k, v in value.items()
         }
     if isinstance(value, list):
-        return [redact_evidence(v, key=key) for v in value]
+        child_key = "" if lowered in _STRUCTURED_VALUE_KEYS else key
+        return [redact_evidence(v, key=child_key) for v in value]
     if isinstance(value, tuple):
-        return [redact_evidence(v, key=key) for v in value]
+        child_key = "" if lowered in _STRUCTURED_VALUE_KEYS else key
+        return [redact_evidence(v, key=child_key) for v in value]
+    if isinstance(value, str):
+        return redact_text(value)
     return value
 
 

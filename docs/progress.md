@@ -103,7 +103,7 @@
 - **OpenSpec**：`deterministic-verification-selector-evidence`；先通过 strict validation，再实施生产代码、测试和文档。完成后合并至 `openspec/specs/{api-agent,driver-hypium,scenario-runner,contracts,cli,mcp-wrapper,selector-resolution}/`。
 - **契约**：trace schema `0.3-p0`；`CaseResult.steps[]` 是唯一证据真源，`tool_calls`/Markdown 为派生投影；新增 execution/verification/evidence、expected-check 四态、StepResult 两级失败分类和环境/selector 证据。
 - **语义**：Hypium wait 返回值、Toast 预监听与布尔结果、exact/contains、action 多候选、聚合富文本 fail-closed 已覆盖 fake/native/resolver 回归。
-- **版本/迁移**：推荐 Hylyre `0.4.0`（0.x minor 级行为收紧）；见 `CHANGELOG.md`、`docs/deterministic-verification.md`、`docs/migration-0.4.md`。真机复验项仍 pending，不以 fake 结果冒充。
+- **版本/迁移**：当前推荐 Hylyre `0.4.1`（结构化 selector identity 脱敏修复）；见 `CHANGELOG.md`、`docs/deterministic-verification.md`、`docs/migration-0.4.md`。真机复验项仍 pending，不以 fake 结果冒充。
 
 ## 2026-08-30 · Review hardening follow-up
 

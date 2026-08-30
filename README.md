@@ -6,6 +6,7 @@
 - **Agent 默认如何用 Hylyre（不必每轮交代）**：[AGENTS.md](AGENTS.md) + [`.cursor/rules/hylyre.mdc`](.cursor/rules/hylyre.mdc)；MCP 一次性配置：[docs/cursor-mcp-setup.md](docs/cursor-mcp-setup.md)
 - **进度**：[docs/progress.md](docs/progress.md)
 - **输出契约（SSOT）**：`hylyre/contracts/`（`trace.json` / 测试报告章节与枚举）；确定性执行、selector 与证据说明见 [docs/deterministic-verification.md](docs/deterministic-verification.md)
+- **当前推荐版本**：Hylyre **0.4.1**；结构化 selector identity（`by_id` / `by_key` / `id` / `key` / `selected_id`）在最终序列化中逐字保留，不再按文本规则脱敏；用户文本和值仍继续脱敏。
 
 与业务仓 [SimulatedWalletForHmos](https://github.com/sqsqsq/SimulatedWalletForHmos) 的 **framework** 为**单向输出**关系：本仓不引用其代码；兼容性别名通过 GitHub Actions `compat-framework.yml` **软提醒**（不阻塞主 CI）。
 
@@ -65,7 +66,7 @@ openspec list
 
 ## 当前阶段
 
-**0.4.0 确定性验证改造已完成代码与离线契约验收**：新 trace schema `0.3-p0`、StepResult ledger、严格 selector/Toast/wait 语义已落地；真机复验仍按 [docs/migration-0.4.md](docs/migration-0.4.md) 标记 pending。
+**0.4.1 结构化 selector identity 修复已完成代码与离线契约验收**：trace schema 继续为 `0.3-p0`，`StepResult` ledger 与严格 selector/Toast/wait 语义保持不变；结构化 selector identity 不再按文本规则脱敏，真机复验仍按 [docs/migration-0.4.md](docs/migration-0.4.md) 标记 pending。
 
 ## License
 

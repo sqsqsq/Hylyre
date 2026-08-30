@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 — structured selector identity redaction
+
+- Preserved `by_id`, `by_key`, `id`, `key`, and `selected_id` verbatim in serialized selector evidence, including failure candidates.
+- Kept user-facing text and value fields, including `expected` and `actual`, behind the existing redaction boundary.
+- Kept trace schema `0.3-p0` and the existing `StepResult`/`CaseResult` field sets unchanged.
+
 ## 0.4.0 — deterministic verification and evidence
 
 This release is intentionally behavior-tightening and is not published by this repository change.
