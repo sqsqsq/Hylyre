@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import importlib.util
 import json
@@ -238,3 +239,105 @@ def test_source_tree_pip_installable_with_package_data(
     assert (target / "hylyre" / "contracts" / "report-sections.yaml").is_file()
     assert (target / "hylyre" / "contracts" / "output-schema.json").is_file()
     assert (target / "hylyre" / "api" / "planned_step_keys.py").is_file()
+
+
+# --------------------------------------------------------- contracts freeze (schema 3)
+def test_contracts_freeze_stages_only_the_protocol_package(tmp_path: Path) -> None:
+    """--contracts ships hylyre/contracts and nothing that could be installed."""
+
+    out = tmp_path / "freeze"
+    args = argparse.Namespace(out_dir=str(out), clean=True)
+    assert bw.cmd_build_contracts(args) == 0
+
+    staged = out / "contracts"
+    names = {p.name for p in staged.rglob("*") if p.is_file()}
+    assert {"output-schema.json", "step-outcome-v1.md", "builder-decision-table.md",
+            "report-sections.yaml", "reference_reducer.py"} <= names
+    assert (staged / "golden").is_dir()
+    # Not installable by construction.
+    for forbidden in ("pyproject.toml", "setup.py", "setup.cfg"):
+        assert not (staged / forbidden).exists()
+    assert not any(p.name == "__pycache__" for p in staged.rglob("*"))
+
+
+def test_contracts_freeze_manifest_and_verify_roundtrip(tmp_path: Path) -> None:
+    out = tmp_path / "freeze"
+    assert bw.cmd_build_contracts(argparse.Namespace(out_dir=str(out), clean=True)) == 0
+
+    manifest = json.loads((out / "release.manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schema"] == 3
+    assert manifest["kind"] == "contracts-freeze"
+    assert manifest["not_a_release"] is True
+    assert manifest["result_protocol"] == "hylyre.step-outcome/1"
+    assert manifest["trace_schema_version"] == "0.4-p0"
+    assert manifest["source"]["root"] == "contracts"
+    assert manifest["source"]["file_count"] == len(manifest["source"]["files"])
+
+    assert bw.cmd_verify(out) == 0
+
+
+def test_contracts_freeze_verify_detects_tampering(tmp_path: Path) -> None:
+    out = tmp_path / "freeze"
+    assert bw.cmd_build_contracts(argparse.Namespace(out_dir=str(out), clean=True)) == 0
+
+    schema = out / "contracts" / "output-schema.json"
+    schema.write_bytes(schema.read_bytes().replace(b"selector.not_found",
+                                                   b"selector.notfound", 1))
+    assert bw.cmd_verify(out) == 2
+
+
+def test_contracts_freeze_verify_rejects_an_installable_bundle(tmp_path: Path) -> None:
+    """A freeze that gained a pyproject could be mistaken for a runtime release."""
+
+    out = tmp_path / "freeze"
+    assert bw.cmd_build_contracts(argparse.Namespace(out_dir=str(out), clean=True)) == 0
+    (out / "contracts" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    assert bw.cmd_verify(out) == 2
+
+
+def test_contracts_freeze_is_lf_normalized(tmp_path: Path) -> None:
+    """git archive would emit CRLF here (core.autocrlf); the freeze must not."""
+
+    out = tmp_path / "freeze"
+    assert bw.cmd_build_contracts(argparse.Namespace(out_dir=str(out), clean=True)) == 0
+    for p in (out / "contracts").rglob("*"):
+        if p.is_file() and p.suffix.lower() in bw.TEXT_FILE_SUFFIXES:
+            assert b"\r\n" not in p.read_bytes(), p
+
+
+def test_contracts_fingerprint_links_freeze_to_source_release() -> None:
+    """The Phase 0 -> Phase 1 acceptance link: one comparable field."""
+
+    root = bw.repo_root_from_script()
+    fingerprint = bw.contracts_tree_sha256(root)
+
+    staged = bw.hash_contract_files(root)
+    assert bw.compute_tree_sha256(staged) == fingerprint
+
+    # The same value must be derivable from a source-release file list.
+    source_files = [
+        {**f, "path": f"{bw.CONTRACTS_REL}/{f['path']}"} for f in staged
+    ]
+    rederived = bw.compute_tree_sha256(
+        [
+            {**f, "path": str(f["path"])[len(bw.CONTRACTS_REL) + 1:]}
+            for f in source_files
+            if str(f["path"]).startswith(bw.CONTRACTS_REL + "/")
+        ]
+    )
+    assert rederived == fingerprint
+
+
+def test_contracts_zip_is_reproducible(tmp_path: Path) -> None:
+    """Two builds of the same tree must produce byte-identical archives."""
+
+    first, second = tmp_path / "a", tmp_path / "b"
+    src = tmp_path / "payload"
+    src.mkdir()
+    (src / "x.json").write_text('{"a": 1}\n', encoding="utf-8")
+    (src / "sub").mkdir()
+    (src / "sub" / "y.md").write_text("# y\n", encoding="utf-8")
+
+    bw.write_deterministic_zip(src, first)
+    bw.write_deterministic_zip(src, second)
+    assert first.read_bytes() == second.read_bytes()

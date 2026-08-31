@@ -12,11 +12,47 @@ import typer
 
 from hylyre.harness.runner import verify_report, verify_report_details
 from hylyre.report.emit import write_run_artifacts
+from hylyre.scenario.plan_contract import (
+    ContractRejection,
+    validate_plan_contract,
+    validate_steps_contract,
+)
 from hylyre.scenario.plan_parse import ParsedPlan, TestCase
 from hylyre.scenario.runner import CaseResult, ScenarioRunResult, ScenarioRunner
 from hylyre.scenario.steps_report import steps_batch_to_scenario_result
 
 TRACE_DRAFT_SCHEMA = "0.1-p0"
+
+
+def emit_pre_run_reject(rejection: ContractRejection) -> None:
+    """Write the only stdout JSON object for a plan reject and exit with code 2.
+
+    Nothing else may reach stdout, no device is contacted, and neither
+    ``--trace-out`` nor ``--report-out`` is created or rewritten.
+    """
+
+    typer.echo(rejection.to_json())
+    raise typer.Exit(code=2)
+
+
+def reject_plan_before_run(plan: Path) -> None:
+    """Emit ``pre_run_reject`` when a plan violates the step contract."""
+
+    try:
+        rejection = validate_plan_contract(plan)
+    except ValueError:
+        # Plan parsing errors keep their existing non-protocol handling.
+        return
+    if rejection is not None:
+        emit_pre_run_reject(rejection)
+
+
+def reject_steps_before_run(steps: list[Any]) -> None:
+    """Emit ``pre_run_reject`` when a steps payload violates the step contract."""
+
+    rejection = validate_steps_contract(steps)
+    if rejection is not None:
+        emit_pre_run_reject(rejection)
 
 
 def infer_model_backend_from_env() -> str:

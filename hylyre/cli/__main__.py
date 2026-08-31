@@ -347,6 +347,9 @@ def run_plan_batch(
                 if steps_file is not None
                 else Path("<inline-steps>")
             )
+            # P0-7B: reject a contract-invalid batch before any device call and
+            # before --report-out/--trace-out are created.
+            run_cmd.reject_steps_before_run(step_list)
             try:
                 msg, synth = run_cmd.execute_steps_scenario(
                     steps_path=steps_path,
@@ -423,6 +426,9 @@ def run_plan_batch(
     fd_plan = failure_dir
     if fd_plan is None and report_out is not None:
         fd_plan = Path(report_out).parent / "failures"
+    # P0-7B: reject a contract-invalid plan before any device call and before
+    # --report-out/--trace-out are created.
+    run_cmd.reject_plan_before_run(Path(plan))
     run_cmd.run_scenario(
         plan=plan,
         feature=feature,

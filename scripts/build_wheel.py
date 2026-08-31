@@ -1,11 +1,23 @@
 #!/usr/bin/env python3
 """Build downstream framework vendor releases for hylyre.
 
-Two coexisting modes:
+Three coexisting modes:
 
 - default: single ``py3-none-any`` wheel + ``release.manifest.json`` (schema 1);
 - ``--source``: plain-source tree under ``src/`` + manifest schema 2, for
-  downstream repos that forbid committing binary archives (``.whl``/``.tar.gz``).
+  downstream repos that forbid committing binary archives (``.whl``/``.tar.gz``);
+- ``--contracts``: contract-freeze bundle under ``contracts/`` + manifest
+  schema 3. Source form only, and deliberately **not installable**: it carries
+  no ``pyproject.toml`` and no runtime modules, so it can never be mistaken for
+  an intermediate release. Its ``source.tree_sha256`` equals the
+  ``contracts_tree_sha256`` a later plain-source release reports, which is how a
+  frozen contract package is proven to have shipped verbatim.
+
+Why not ``git archive`` for the freeze: with ``core.autocrlf=true`` and no
+``.gitattributes`` (this repo), ``git archive`` rewrites line endings on the way
+out, so the same commit produces different bytes — and a different archive
+hash — depending on the packager's git config. All three modes here normalize to
+LF and hash the bytes they actually wrote.
 """
 
 from __future__ import annotations
@@ -110,6 +122,89 @@ def stage_source_tree(root: Path, src_dir: Path) -> list[dict[str, object]]:
     return files
 
 
+CONTRACTS_ROOT_NAME = "contracts"
+CONTRACTS_REL = "hylyre/contracts"
+
+
+def iter_contract_files(root: Path) -> list[tuple[Path, str]]:
+    """(abs_path, posix_rel_path) for ``hylyre/contracts/**``, path-byte-sorted.
+
+    Paths are relative to ``hylyre/contracts`` so the fingerprint is independent
+    of where the directory is staged.
+    """
+    base = root / "hylyre" / "contracts"
+    entries: list[tuple[Path, str]] = []
+    for p in base.rglob("*"):
+        if not p.is_file():
+            continue
+        rel_parts = p.relative_to(base).parts
+        if any(
+            part in SOURCE_EXCLUDED_DIR_NAMES or part.endswith(SOURCE_EXCLUDED_DIR_SUFFIXES)
+            for part in rel_parts[:-1]
+        ):
+            continue
+        if p.name.endswith(SOURCE_EXCLUDED_FILE_SUFFIXES):
+            continue
+        entries.append((p, "/".join(rel_parts)))
+    entries.sort(key=lambda e: e[1].encode("utf-8"))
+    return entries
+
+
+def hash_contract_files(root: Path) -> list[dict[str, object]]:
+    """Hash the contract tree over LF-normalized bytes without staging it.
+
+    Same normalization as ``stage_source_tree`` so a contracts freeze and the
+    ``hylyre/contracts`` subtree of a plain-source release produce the *same*
+    fingerprint. That equality is the Phase 0 -> Phase 1 acceptance link.
+    """
+    files: list[dict[str, object]] = []
+    for abs_path, rel in iter_contract_files(root):
+        data = abs_path.read_bytes()
+        if Path(rel).suffix.lower() in TEXT_FILE_SUFFIXES:
+            data = normalize_to_lf(data)
+        files.append(
+            {
+                "path": rel,
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "size_bytes": len(data),
+            }
+        )
+    return files
+
+
+def contracts_tree_sha256(root: Path) -> str:
+    """Fingerprint of ``hylyre/contracts/**`` (LF bytes, paths relative to it)."""
+    return compute_tree_sha256(hash_contract_files(root))
+
+
+def stage_contract_tree(root: Path, dst_dir: Path) -> list[dict[str, object]]:
+    """Copy the contract package into ``dst_dir`` LF-normalized; hash what is written."""
+    files: list[dict[str, object]] = []
+    crlf_offenders: list[str] = []
+    for abs_path, rel in iter_contract_files(root):
+        data = abs_path.read_bytes()
+        if Path(rel).suffix.lower() in TEXT_FILE_SUFFIXES:
+            data = normalize_to_lf(data)
+        if b"\r\n" in data:
+            crlf_offenders.append(rel)
+        dst = dst_dir / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(data)
+        files.append(
+            {
+                "path": rel,
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "size_bytes": len(data),
+            }
+        )
+    if crlf_offenders:
+        raise RuntimeError(
+            "staged contract files contain CRLF (suffix not in TEXT_FILE_SUFFIXES?): "
+            + ", ".join(crlf_offenders)
+        )
+    return files
+
+
 def compute_tree_sha256(files: list[dict[str, object]]) -> str:
     """sha256 over concatenated ``"<path>\\n<sha256>\\n"``, files sorted by path bytes."""
     ordered = sorted(files, key=lambda f: str(f["path"]).encode("utf-8"))
@@ -137,6 +232,15 @@ def build_source_manifest(
             "tree_sha256": compute_tree_sha256(ordered),
             "files": ordered,
         },
+        # Same algorithm and path base as a contracts-freeze bundle, so a frozen
+        # contract package can be proven to ship verbatim inside this release.
+        "contracts_tree_sha256": compute_tree_sha256(
+            [
+                {**f, "path": str(f["path"])[len(CONTRACTS_REL) + 1 :]}
+                for f in ordered
+                if str(f["path"]).startswith(CONTRACTS_REL + "/")
+            ]
+        ),
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "generator": {
             "python": generator_python,
@@ -156,6 +260,55 @@ def build_source_manifest(
     if integration_docs:
         manifest["integration_docs"] = integration_docs
     return manifest
+
+
+def read_protocol_versions(root: Path) -> tuple[str, str]:
+    """Read (result_protocol, trace_schema_version) from the contract package itself."""
+    schema_path = root / "hylyre" / "contracts" / "output-schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    protocols = schema["properties"]["result_protocol"]["enum"]
+    env = schema["$defs"]["environmentV1"]["properties"]
+    return str(protocols[0]), str(env["trace_schema_version"]["const"])
+
+
+def build_contracts_manifest(
+    files: list[dict[str, object]],
+    hylyre_version: str,
+    result_protocol: str,
+    trace_schema_version: str,
+    generator_python: str,
+    platform_desc: str,
+) -> dict:
+    ordered = sorted(files, key=lambda f: str(f["path"]).encode("utf-8"))
+    return {
+        "schema": 3,
+        "kind": "contracts-freeze",
+        "not_a_release": True,
+        "hylyre_version": hylyre_version,
+        "result_protocol": result_protocol,
+        "trace_schema_version": trace_schema_version,
+        "source": {
+            "root": CONTRACTS_ROOT_NAME,
+            "file_count": len(ordered),
+            "total_bytes": sum(int(f["size_bytes"]) for f in ordered),  # type: ignore[arg-type]
+            "tree_sha256": compute_tree_sha256(ordered),
+            "files": ordered,
+        },
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generator": {"python": generator_python, "platform": platform_desc},
+        "note": (
+            "CONTRACT FREEZE ONLY - this is NOT a Hylyre release and MUST NOT be installed. "
+            "It carries no runtime: no pyproject.toml and no production modules, so "
+            "`pip install` cannot succeed by construction. It exists so a consumer can build "
+            "and test a typed parser, routing and gates against the frozen schema, spec, "
+            "decision table, reference reducer and golden fixtures before the implementation "
+            "exists. All text files are LF-normalized; source.tree_sha256 = sha256 over the "
+            'concatenation of "<path>\\n<sha256>\\n" for all files under source.root sorted by '
+            "POSIX relative path byte order, with paths relative to hylyre/contracts. The same "
+            "value appears as contracts_tree_sha256 in a plain-source release manifest, so the "
+            "shipped implementation can be proven to carry these contracts verbatim."
+        ),
+    }
 
 
 def get_pip_version() -> str:
@@ -396,6 +549,93 @@ def cmd_build_source(args: argparse.Namespace) -> int:
     return 0
 
 
+def write_deterministic_zip(src_dir: Path, out_zip: Path) -> None:
+    """Zip ``src_dir`` reproducibly: sorted entries, fixed timestamps, stored bytes.
+
+    A ``git archive`` zip is not reproducible here — ``core.autocrlf`` rewrites
+    line endings on the way out, so the same commit yields different bytes on
+    machines with different git config, and the archive hash handed to a
+    consumer would be meaningless.
+    """
+    import zipfile
+
+    entries = sorted(
+        (p for p in src_dir.rglob("*") if p.is_file()),
+        key=lambda p: "/".join(p.relative_to(src_dir).parts).encode("utf-8"),
+    )
+    with zipfile.ZipFile(out_zip, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for p in entries:
+            rel = "/".join((src_dir.name, *p.relative_to(src_dir).parts))
+            info = zipfile.ZipInfo(rel, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            zf.writestr(info, p.read_bytes())
+
+
+def cmd_build_contracts(args: argparse.Namespace) -> int:
+    """Contract-freeze bundle: the protocol package only, never installable."""
+    root = repo_root_from_script()
+    out_dir = Path(args.out_dir).resolve()
+    if args.clean and out_dir.exists():
+        shutil.rmtree(out_dir)
+    contracts_dir = out_dir / CONTRACTS_ROOT_NAME
+    if contracts_dir.exists():
+        shutil.rmtree(contracts_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    import platform as platmod
+
+    version = read_version_from_pyproject(root)
+    try:
+        files = stage_contract_tree(root, contracts_dir)
+    except RuntimeError as e:
+        print(f"build: {e}", file=sys.stderr)
+        return 1
+    if not files:
+        print("build: no contract files found", file=sys.stderr)
+        return 1
+
+    result_protocol, trace_schema_version = read_protocol_versions(root)
+    manifest = build_contracts_manifest(
+        files,
+        version,
+        result_protocol,
+        trace_schema_version,
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        platmod.platform(),
+    )
+    manifest_path = out_dir / "release.manifest.json"
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    fingerprint = str(manifest["source"]["tree_sha256"])  # type: ignore[index]
+    zip_path = out_dir / f"hylyre-contracts-{trace_schema_version}-{fingerprint[:12]}.zip"
+    write_deterministic_zip(contracts_dir, zip_path)
+
+    print(str(contracts_dir.resolve()))
+    print(str(manifest_path.resolve()))
+    print(str(zip_path.resolve()))
+    print(
+        "---\n"
+        f"protocol      : {result_protocol}\n"
+        f"trace schema  : {trace_schema_version}\n"
+        f"files         : {manifest['source']['file_count']}\n"  # type: ignore[index]
+        f"tree_sha256   : {fingerprint}\n"
+        f"zip sha256    : {compute_sha256(zip_path)}\n"
+        "---\n"
+        "This is a CONTRACT FREEZE, not a release: no pyproject.toml and no runtime\n"
+        "modules, so it cannot be pip-installed. Hand the zip + its sha256 to the\n"
+        "consumer; they verify the unpacked directory with:\n"
+        f'  {sys.executable} "{(root / "scripts" / "build_wheel.py").resolve()}" --verify <dir>\n'
+        "Keep tree_sha256: the 0.5.0 source release must report the same value in\n"
+        "its contracts_tree_sha256 field, which proves the contracts shipped verbatim."
+    )
+    return 0
+
+
 def cmd_build(args: argparse.Namespace) -> int:
     root = repo_root_from_script()
     out_dir = Path(args.out_dir).resolve()
@@ -464,6 +704,8 @@ def cmd_verify(directory: Path) -> int:
         print(f"verify: invalid JSON: {e}", file=sys.stderr)
         return 3
 
+    if manifest.get("schema") == 3:
+        return verify_source_release(d, manifest, require_pyproject=False)
     if manifest.get("schema") == 2:
         return verify_source_release(d, manifest)
 
@@ -502,8 +744,47 @@ def _is_safe_rel_path(path_str: str) -> bool:
     return ".." not in path_str.split("/")
 
 
-def verify_source_release(d: Path, manifest: dict) -> int:
-    """Verify a schema-2 (plain-source tree) release directory.
+def _verify_contract_provenance(src_root: Path, manifest: dict, rc: int) -> int:
+    """Schema-3: the bundle must declare the protocol its own schema declares, and
+    must not smuggle in anything installable."""
+    for forbidden in ("pyproject.toml", "setup.py", "setup.cfg"):
+        if (src_root / forbidden).exists():
+            print(
+                f"verify: contracts freeze must not contain {forbidden} "
+                "(it is not a release and must not be installable)",
+                file=sys.stderr,
+            )
+            rc = 2
+    try:
+        schema = json.loads(
+            (src_root / "output-schema.json").read_text(encoding="utf-8")
+        )
+        protocol = schema["properties"]["result_protocol"]["enum"][0]
+        trace_schema = schema["$defs"]["environmentV1"]["properties"][
+            "trace_schema_version"
+        ]["const"]
+    except (OSError, KeyError, IndexError, json.JSONDecodeError) as e:
+        print(f"verify: cannot read protocol from staged output-schema.json: {e}", file=sys.stderr)
+        return 3
+    for label, expected, actual in (
+        ("result_protocol", manifest.get("result_protocol"), protocol),
+        ("trace_schema_version", manifest.get("trace_schema_version"), trace_schema),
+    ):
+        if expected != actual:
+            print(
+                f"verify: {label} mismatch\n"
+                f"  manifest: {expected}\n"
+                f"  schema:   {actual}",
+                file=sys.stderr,
+            )
+            rc = 2
+    return rc
+
+
+def verify_source_release(
+    d: Path, manifest: dict, *, require_pyproject: bool = True
+) -> int:
+    """Verify a schema-2 (plain-source tree) or schema-3 (contracts freeze) directory.
 
     Strict inside ``source.root`` (per-file sha/size, aggregates, no undeclared
     files); everything outside it belongs to the downstream repo and is ignored.
@@ -606,6 +887,11 @@ def verify_source_release(d: Path, manifest: dict) -> int:
             )
             rc = 2
 
+    if not require_pyproject:
+        # A contracts freeze carries no runtime, so there is no pyproject to
+        # cross-check; its provenance is the protocol declared by the schema.
+        return _verify_contract_provenance(src_root, manifest, rc)
+
     try:
         staged_version = read_version_from_pyproject(src_root)
     except (OSError, RuntimeError) as e:
@@ -668,11 +954,19 @@ def main() -> int:
         help="build plain-source tree release (manifest schema 2) instead of a wheel",
     )
     parser.add_argument(
+        "--contracts",
+        action="store_true",
+        help=(
+            "build a contract-freeze bundle (manifest schema 3): hylyre/contracts "
+            "only, source form, never installable"
+        ),
+    )
+    parser.add_argument(
         "--verify",
         metavar="DIR",
         help=(
             "verify release.manifest.json matches files on disk "
-            "(schema auto-detected: 1 = wheel, 2 = source tree)"
+            "(schema auto-detected: 1 = wheel, 2 = source tree, 3 = contracts freeze)"
         ),
     )
     args = parser.parse_args()
@@ -680,9 +974,18 @@ def main() -> int:
     if args.verify:
         return cmd_verify(Path(args.verify))
 
-    if args.out_dir is None:
-        args.out_dir = "dist/release-src" if args.source else "dist/release"
+    if args.contracts and args.source:
+        print("build: --contracts and --source are mutually exclusive", file=sys.stderr)
+        return 3
 
+    if args.out_dir is None:
+        if args.contracts:
+            args.out_dir = "dist/contracts-freeze"
+        else:
+            args.out_dir = "dist/release-src" if args.source else "dist/release"
+
+    if args.contracts:
+        return cmd_build_contracts(args)
     if args.source:
         return cmd_build_source(args)
     return cmd_build(args)

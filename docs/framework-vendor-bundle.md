@@ -121,3 +121,49 @@ pip install "<vendor>\src" "hylyre[device,mcp]" --extra-index-url https://pypi.t
 
 - 实现脚本：[scripts/build_wheel.py](../scripts/build_wheel.py)
 - OpenSpec 变更：`openspec/changes/add-vendor-bundle/`、`openspec/changes/add-source-release/`
+
+---
+
+## 契约冻结包（`--contracts`，manifest schema 3）
+
+用于**契约先行**：消费方（Maison）在 Hylyre 生产实现完成之前，就用冻结的 Schema、规范、判定表、reference reducer 与 golden fixtures 开发并测试 typed parser、routing 与门禁。
+
+```powershell
+python scripts/build_wheel.py --contracts --clean
+```
+
+产出 `dist/contracts-freeze/`：
+
+```text
+contracts/                      # hylyre/contracts/** 逐字节（LF 归一化，排除 __pycache__）
+  output-schema.json
+  step-outcome-v1.md
+  builder-decision-table.md
+  report-sections.yaml
+  reference_reducer.py
+  __init__.py  README.md  golden/**
+release.manifest.json           # schema 3
+hylyre-contracts-<schema>-<fp>.zip
+```
+
+### 它不是发布件
+
+包内**没有** `pyproject.toml`、没有任何 runtime 模块，因此 `pip install` 在构造上就不可能成功——不会被误当成可运行的中间版本。`--verify` 额外强制这一点：若包内出现 `pyproject.toml` / `setup.py` / `setup.cfg`，直接判 `2`。
+
+### 交付与校验
+
+把 zip 与其 SHA-256 交给消费方；解包后用同一条命令校验：
+
+```powershell
+python scripts/build_wheel.py --verify <解包目录>
+```
+
+`--verify` 自动识别 schema 3：逐文件 sha256/size、`tree_sha256`/`file_count`/`total_bytes` 聚合、未声明文件检测，外加「manifest 声明的 `result_protocol`/`trace_schema_version` 必须等于包内 `output-schema.json` 自己声明的值」。
+
+### 为什么不用 `git archive`
+
+本仓 `core.autocrlf=true` 且无 `.gitattributes`。实测 `git archive` 会在导出时改写行尾（index 里是 LF，导出成 CRLF），因此**同一个 commit 在不同 git 配置的机器上产出不同字节、不同哈希**，交给消费方的哈希随之失去意义。三种模式统一做 LF 归一化并对实际写出的字节取哈希；zip 也按固定时间戳与排序写入，保证可复现。
+
+### `tree_sha256`：Phase 0 → Phase 1 的验收纽带
+
+冻结包的 `source.tree_sha256` 与后续 plain-source 发布件 manifest 里的 `contracts_tree_sha256` 使用**同一算法、同一路径基准**（相对 `hylyre/contracts`）。两者相等即机械证明「随实现发布的契约与冻结件逐字节一致」；不等就必须逐文件说明改了什么、为什么。

@@ -40,7 +40,7 @@ where = ["."]
 include = ["hylyre*"]
 
 [tool.setuptools.package-data]
-"hylyre.contracts" = ["*.json", "*.yaml", "*.yml", "*.md"]
+"hylyre.contracts" = ["*.json", "*.yaml", "*.yml", "*.md", "golden/**/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
