@@ -106,21 +106,93 @@ any machine regardless of git `core.autocrlf`).
 `contracts_tree_sha256` equal to `source.tree_sha256` above. If it differs, the shipped
 contracts are not the frozen ones and every differing file must be justified.
 
-## Phase 1 — real 0.5.0 implementation (blocked on the Phase 0 review)
+## Phase 1 — real 0.5.0 implementation
 
-- [ ] Transient `OperationOutcome` tagged union (`OperationPassed|Failed|Blocked|Skipped`).
-- [ ] **D-2 acceptance point**: builder populates `device_session` from real machine
-      facts (never a hard-coded constant).
-- [ ] Production reducer/verifier must agree with `contracts/reference_reducer.py` on
-      every `golden/trace/valid/**` and reject every `golden/trace/invalid-crossrow/**`.
-- [ ] Single `OperationOutcome → StepResult` builder.
-- [ ] Wire real plan runner, native/resolver driver, fake runner, steps-file/inline batch.
-- [ ] Wire atomic CLI, MCP atomic/batch, session daemon (smoke-level per entry).
-- [ ] `CaseResult`/`RunResult` as pure reducers.
-- [ ] Verifier owns cross-row rules; **delete** `hylyre/harness/runner.py:151-157`
-      (`status != passed → failure_kind/failure_code`) without renaming or copying it.
-- [ ] Emit `0.4-p0` + `result_protocol` from `hylyre/report/emit.py`; `tool_calls` nested projection.
-- [ ] Legacy isolation: `report begin/record/finalize` and 0.3/0.2 stay legacy-labelled.
-- [ ] Failure-boundary artifact capture with sha256 + capture-unavailable path.
-- [ ] Version 0.5.0, README/CHANGELOG/migration, source manifest and release assets.
-- [ ] Full conformance run against the Phase 0 golden fixtures; one source build + verify.
+- [x] Transient `OperationOutcome` tagged union (`hylyre/api/outcome.py`), with typed
+      control-flow exceptions converted **once** at the dispatch boundary
+      (`hylyre/api/outcome_from_error.py`) — by exception type, never message text.
+- [x] **D-2 acceptance point**: `device_session` comes from `HylyreAgent.is_connected`,
+      read *after* the operation (sampling it before would report "no session" for the
+      first step of every run and silently exempt it from the artifact obligation).
+- [x] Production reducer delegates to `contracts/reference_reducer.py` rather than
+      restating section 9, so the two cannot drift; conformance asserts agreement on
+      every `golden/trace/valid/**` and rejection of every `invalid-crossrow/**`.
+- [x] Single `OperationOutcome → StepResult` builder (`hylyre/scenario/step_builder.py`),
+      enforcing the L-1/L-2 local rules it is uniquely positioned to know.
+- [x] Wire real plan runner, native/resolver driver, fake runner, steps-file/inline batch.
+- [x] Wire atomic CLI, MCP atomic/batch, session daemon; all declare the protocol via
+      the shared `step_response`/`batch_response` envelope.
+- [x] `CaseResult`/`RunResult`/`tool_calls` reduced from `steps[]` only.
+- [x] Verifier owns cross-row rules; the `status != passed → failure_kind/failure_code`
+      rule is **deleted** (only a docstring records why), not renamed or copied.
+- [x] `emit.py` writes `0.4-p0` + `result_protocol`; `tool_calls` keeps the nested shape.
+- [x] Legacy isolation: `report begin/record/finalize` stays legacy and never declares
+      the protocol; dispatch is fail-closed on unknown combinations.
+- [x] Failure-boundary artifacts carry a real sha256 and a relative path; capture
+      failure records `hylyre.capture` instead of fabricating a file.
+- [x] Version 0.5.0, README/CHANGELOG/`docs/migration-0.5.md`, source manifest.
+- [x] Conformance suite (`tests/schema/test_phase1_conformance.py`), full pytest,
+      one source build + verify.
+
+### Contract amendment during Phase 1 (requires review)
+
+Implementation found one frozen rule that could not represent a real run:
+`selectorSelectedV1.id` required a non-empty string, but `ResolvedHit.id` is `""` for a
+node matched purely by text (`hylyre/api/selector_resolve.py:56,163`), which 0.3-p0
+reported as `selected_id: null`. A unique resolution of an id-less node was therefore
+**unrepresentable**.
+
+Amended together, per the freeze rule:
+
+- `output-schema.json`: `selected.id` nullable, with `anyOf` requiring `id` *or*
+  `bounds` — a contentless `selected` stays illegal, and backfilling the request
+  into `selected` stays illegal;
+- `step-outcome-v1.md` section 6.1: documents the case;
+- `golden/resolution/valid/unique-without-structured-id.json` (positive) and
+  `golden/resolution/invalid/unique-selected-without-any-identity.json` (negative).
+
+A second review round then required the native-path resolution rules to be written
+into the spec (section 6.1), which moved the fingerprint again.
+
+| Stage | contracts `tree_sha256` | files |
+|---|---|---|
+| Phase 0 freeze | `e0833814…df31` | 223 |
+| + nullable `selected.id` (a resolved node may have no id) | `a047d52e…a384` | 225 |
+| + native-path resolution rules written into spec section 6.1 | `623d6c5f…40c4` | 225 |
+| + Q5 artifact path base, Q8 multi-root allowance | **`cc738c272324…1bae`** | 226 |
+
+**Maison must take the latest bundle**: `hylyre-contracts-0.4-p0-cc738c272324.zip`,
+zip sha256 `d113d2ee6ac23c1cd0df1fafff4a18304db36b11a93e947b44834bf3d4f07a0c`.
+Every earlier fingerprint is superseded.
+
+Revision 4 answers Maison's Phase 0 reconciliation:
+
+- **Q5** — `artifacts[].path` resolves as `resolve(dirname(trace_path), path)`, must stay
+  inside that tree, and has no second base and no working-directory dependency. This was
+  not documentation alone: the producer recorded paths relative to the *failure* directory,
+  so a trace written elsewhere could not locate its own evidence. The failure directory now
+  sits beside the trace and the base is threaded to the capture point.
+- **Q8** — `prior_step` MAY reference any earlier eligible root in the same case; nearest is
+  not required. Pinned by `golden/trace/valid/prior-step-references-an-earlier-root.json`,
+  which deliberately skips the nearer root.
+
+### Review sign-off
+
+Both independent reviews closed **PASS** on 2026-08-31 against
+`cc738c272324…1bae`, with 829 passed / 2 skipped, both bundles `--verify` clean,
+and the shipped contracts compared file-by-file against the working tree (226/226).
+
+### Phase 1 review round 2 — findings closed
+
+| Finding | Fix |
+|---|---|
+| steps-file report mode emitted a trace its own verifier rejected | one batch is one case (`STEPS-BATCH`), so `prior_step` closes inside it |
+| native wait backfilled the request into `selected` | `resolution` derived from the observation; absent ⇒ `not_found` |
+| real Hypium `wait_for` raised a selector error for a timeout | driver returns an observation; the agent classifies `assertion.mismatch` |
+| MCP atomic response was double-wrapped, losing top-level protocol | serialize the envelope directly |
+| `ai_assert` outcome discarded; CLI always returned "ok" | CLI emits the envelope and exits non-zero; `ai_wait_for` consumes outcomes |
+| device death: next case re-attempted instead of re-probing | fresh `device_preflight` probe forms that case's own root |
+| unconfigured failure-dir reported as `transport_failure` | honest reason code |
+| generic `ValueError` blamed on the plan; bad return escaped as TypeError | only `PlannedStepContractError` maps to `contract.*`; wiring bugs become `internal.unexpected_exception` and still produce a row |
+| fake selector failure had no selector evidence | stub emits request + `not_found` resolution |
+| dispatch exposed internal aliases, not the frozen codes | `trace_dispatch_code()` returns `legacy_unsupported_for_evidence` / `unsupported_schema_or_protocol` |

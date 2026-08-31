@@ -59,5 +59,5 @@ def test_verify_rejects_trace_outcome_mismatch(tmp_path: Path) -> None:
     data = json.loads(trace.read_text(encoding="utf-8"))
     data["outcome"] = "success"
     trace.write_text(json.dumps(data, indent=2), encoding="utf-8")
-    with pytest.raises(ValueError, match="trace.json outcome"):
+    with pytest.raises(ValueError, match="run outcome"):
         verify_report(report, trace, FIXTURE_PLAN)

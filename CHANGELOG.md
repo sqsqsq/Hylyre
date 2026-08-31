@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.5.0 — Step Outcome Protocol v1 (breaking)
+
+**Breaking**: trace schema `0.3-p0` → `0.4-p0`, and every result envelope now
+declares `result_protocol: "hylyre.step-outcome/1"`. Consumers must dispatch on
+`(schema_version, result_protocol)`; see [`docs/migration-0.5.md`](docs/migration-0.5.md).
+
+The flat `StepResult` had no discriminator, so it permitted — and the verifier
+actively required — contradictory rows (`blocked` carrying a `failure`,
+`candidate_count=0` with a `selected_id`, `role=assertion` with a selector
+failure). One real root failure was amplified into 56 downstream defects.
+
+- `outcome` is a discriminated union: `passed` carries an observation, `failed`
+  a failure, `blocked` a cause, `skipped` a reason. Nothing carries two.
+- `status` is decided only by whether a step was **attempted**. `capability` and
+  `infrastructure` are attribution domains: found before dispatch they block,
+  found after dispatch they fail.
+- A blocked suffix points at the root step with `cause.type=prior_step` and no
+  longer inherits the root's failure classification.
+- `selector` splits into `request` (plan intent) and `resolution` (what the
+  executor found), so a requested id is never reported as a resolved one.
+- `failure`/`cause`/`reason`/`resolution.reason_code` are four namespaced code
+  registries; unnamespaced codes and domain/code prefix conflicts are rejected.
+- A root selector/assertion failure inside a live device session must carry a
+  screenshot or UI dump, with a real sha256; capture is never faked.
+- `CaseResult`/`RunResult`/`tool_calls` are reduced from `steps[]` by the
+  reducer shipped in the contract package, so Hylyre and its consumers cannot
+  drift. `tool_calls` keeps the nested outcome shape; no flat `failure_kind`.
+- **Removed**: the `status != passed → failure_kind/failure_code` rule that
+  forced unexecuted and policy-skipped steps to fabricate a failure taxonomy.
+- Empty cases and statically invalid steps are rejected before any device call
+  with a single stdout JSON object and exit code `2`.
+- Every entry (plan, fake, steps-file/batch, atomic CLI, MCP, session) builds
+  rows through one builder; the offline stub no longer hand-assembles rows and
+  no longer reports assertions it cannot observe.
+- Contract package (`hylyre/contracts/`) ships the schema, the normative spec,
+  the builder decision table, the reference reducer and 218 golden fixtures, all
+  readable offline. `build_wheel.py --contracts` produces a non-installable
+  contract-freeze bundle.
+
 ## 0.4.1 — structured selector identity redaction
 
 - Preserved `by_id`, `by_key`, `id`, `key`, and `selected_id` verbatim in serialized selector evidence, including failure candidates.

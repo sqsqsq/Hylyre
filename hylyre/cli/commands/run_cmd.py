@@ -122,6 +122,7 @@ def execute_scenario(
                 mock_group=mock_group,
                 skip_assert_expected=skip_assert_expected,
                 failure_dir=failure_dir,
+                artifact_base=Path(trace_out).parent,
             )
         )
         write_run_artifacts(
@@ -168,6 +169,7 @@ def execute_steps_scenario(
         wait_time=wait_time,
         params=params,
         failure_dir=failure_dir,
+        artifact_base=Path(trace_out).parent,
     )
     result = steps_batch_to_scenario_result(
         feature=feature,
@@ -396,6 +398,7 @@ async def _run_on_device(
     mock_group: str | None,
     skip_assert_expected: bool,
     failure_dir: Path | str | None = None,
+    artifact_base: Path | str | None = None,
 ) -> tuple[ScenarioRunResult, str]:
     from hylyre.wiring import create_hypium_agent_with_env_vlm
 
@@ -417,6 +420,7 @@ async def _run_on_device(
             mock_group=mock_group or None,
             check_expected=not skip_assert_expected,
             failure_dir=failure_dir,
+            artifact_base=artifact_base,
         )
         return result, infer_model_backend_from_env()
     finally:

@@ -186,9 +186,24 @@ async def test_run_on_agent_broken_json_friendly_error(tmp_path: Path) -> None:
         )
     finally:
         await ag.aclose()
-    assert r.case_results[0].status == "阻塞"
-    assert "JSON 语法错误" in r.case_results[0].notes
-    assert "TC-BR" in r.case_results[0].notes
+    # Malformed planned JSON that reaches the adapter is a *contract*
+    # violation (decision row D-18), not an infrastructure block: 0.3-p0
+    # classified it as blocked/driver_failure and told the reader the device
+    # was at fault when the plan was.
+    case = r.case_results[0]
+    assert case.status == "失败"
+    step = case.steps[0]
+    assert step.status == "failed"
+    assert step.failure == {
+        "domain": "contract",
+        "code": "contract.invalid_step",
+        "facts": {
+            "detected_in": "adapter",
+            "exception_type": "PlannedStepContractError",
+        },
+    }
+    assert "JSON 语法错误" in case.notes
+    assert "TC-BR" in case.notes
 
 
 @pytest.mark.asyncio

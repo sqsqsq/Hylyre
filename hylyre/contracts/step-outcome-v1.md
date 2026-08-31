@@ -201,6 +201,12 @@ L-3 的推论：如果 selector 失败导致断言**根本没被评估**，该 s
 3. **禁止** `prior_step → prior_step` 因果链；
 4. **禁止跨 case 引用** index。设备在 case 中途死亡时，后续 case 的首个 step 以**新的机器 probe** 形成自己的 root `blocked/infrastructure`。
 
+**多个先前根的选择（冻结）**：同一 case 内存在多个更早的合法根时（例如 batch `on_fail=skip` 下连续两个 `failed`），
+
+> `prior_step` **MAY** reference any earlier eligible real root outcome in the same case; the nearest eligible root is **not** required.
+
+即：builder 可以引用任意一个满足上述 1–4 的根。协议**不引入** root-selection 状态、排序规则或去重机制。消费者只校验引用是否合法，随后对该 `prior_step` 行产生 **0 条** failure route / disposition，**不得**按「最近根」重新推断归属。
+
 `cause.facts` 是 capability/external disposition 的**机器依据**，不是人读 notes。只有 `diagnostic` 散文、没有 `facts` 的 capability/infrastructure 声明**不能**驱动 defer，也不得由下游补猜。
 
 ### 2.5 `skipped` variant
@@ -382,10 +388,25 @@ v1 有且只有四个 code 面。它们**互不通用**：不得把 `failure.cod
 | `ambiguous` | `>= 2` | `null` | 长度 >= 2 |
 | `unresolvable` | `null` 或 `>= 0` | `null` | 任意 |
 
-Schema 直接拒绝：`candidate_count=0` + 非空 `selected.id`；`candidate_count>1` + 非空 `selected`；`not_attempted` + 伪造 `candidate_count`。
+`selected` 的身份可以由 `id` 或 `bounds` 承载：纯文本匹配到的节点**可能没有结构化 id**（resolver 的 `id` 属性为空），此时 `selected.id=null` 而 `bounds` 非空是**合法**的诚实表达。Schema 只要求 `selected` 至少有一项非空——**禁止**空壳 `selected`，也**禁止**把 request 回填进 `selected` 充当身份。
+
+Schema 直接拒绝：`candidate_count=0` + 非空 `selected.id`；`candidate_count>1` + 非空 `selected`；`not_attempted` + 伪造 `candidate_count`；`selected` 的 `id` 与 `bounds` 同时为空。
 verifier 额外复算：`candidates` 非空时 `candidate_count == len(candidates)`（`unresolvable` 且 `candidate_countable=false` 时豁免）。
 
 `not_found` 表示 **resolver 已完成**且确定 0 候选。**不得**用它代替 dump 不可得或 resolver 未完成的 `unresolvable`。
+
+#### native（provider 侧解析）路径的 resolution
+
+当解析由 provider（Hypium）完成而非 Hylyre 自己的 resolver 时，`resolution` 仍然只能描述**执行器实际发现**，按观测事实派生：
+
+| 观测事实 | request kind | `resolution.state` |
+|---|---|---|
+| 目标在场 | `by_id` / `by_key` | `unique`，`selected.id` 取该结构化身份 |
+| 目标在场 | 其它（如 `by_text`） | `not_attempted` —— provider 解析了它，Hylyre 没看到节点身份 |
+| 目标不在场 | 任意 | `not_found` |
+| provider 无法作答 | 任意 | `not_attempted` |
+
+**禁止**在目标不在场或身份不可见时报 `unique`：那等于把 request 回填进 `selected` 充当身份（§3.3）。步骤成功与否由 observation 承载，`not_attempted` 的 resolution 不会掩盖失败。
 
 ### 6.2 `unresolvable` 必需 facts
 
@@ -450,6 +471,26 @@ OperationPassed | OperationFailed | OperationBlocked | OperationSkipped
 ```
 
 `path` 必须是相对路径（禁止绝对路径、盘符与 `..`）；`sha256` 为 64 位小写 hex。
+
+#### `path` 的解析基准（冻结）
+
+`artifacts[].path` **一律相对于承载该 StepResult 的 authoritative trace 文件所在目录**解析：
+
+```text
+resolved_path = resolve(dirname(trace_path), artifact.path)
+```
+
+不变量：
+
+- `path` **必须**保持相对路径；
+- 解析并规范化后**不得逃逸** trace 所在目录树；
+- **禁止**绝对路径、盘符路径，以及任何使 `..` 逃逸出该目录树的形式；
+- artifact 存在时，消费者**用解析后的文件**计算并校验声明的 `sha256`；
+- **不存在第二套隐含基准**：没有 run-dir、reports 根目录之类的备用基准，也**不依赖生产者或消费者的当前工作目录**。
+
+生产者义务：写入 trace 的 producer **必须**按该基准记录 `path`（Hylyre 把 failure 目录放在 trace 文件旁，因此记录形如 `failures/<label>.png`），**不得**写绝对路径。
+
+**不产 trace 的入口**（atomic CLI/MCP、inline batch 响应）没有可供相对的 trace，其 `path` 相对于调用方自己传入的 `failure_dir`。这不是第二套隐含基准——该目录由调用方显式提供，且这些响应本就不是 evidence 真源。
 
 ### 8.1 failure-boundary screen artifact（必填条件）
 

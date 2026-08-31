@@ -171,6 +171,7 @@
           "enum": ["screenshot", "ui_dump", "visible_elements", "log"]
         },
         "path": {
+          "description": "Artifact location, relative to the directory of the authoritative trace file that carries this StepResult: resolved_path = resolve(dirname(trace_path), path). It must stay inside that directory tree, and there is no second base - not a run directory, not a reports root, and never the process working directory. For entries that write no trace (atomic CLI/MCP, inline batch), the base is the caller-supplied failure_dir.",
           "$comment": "Relative only. Rejects POSIX-absolute, Windows drive-absolute, backslash-rooted, UNC, and any parent-traversal segment under either separator.",
           "type": "string",
           "minLength": 1,
@@ -714,13 +715,18 @@
       "additionalProperties": false
     },
     "selectorSelectedV1": {
+      "$comment": "A resolved target may legitimately have no structured id (a node matched purely by text): then bounds carries the identity. What stays forbidden is a contentless selected, and backfilling the request into it.",
       "type": "object",
       "required": ["id"],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "bounds": { "type": ["string", "null"] }
+        "id": { "type": ["string", "null"], "minLength": 1 },
+        "bounds": { "type": ["string", "null"], "minLength": 1 }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "anyOf": [
+        { "properties": { "id": { "type": "string" } }, "required": ["id"] },
+        { "properties": { "bounds": { "type": "string" } }, "required": ["bounds"] }
+      ]
     },
     "resolutionReasonCode": {
       "type": "string",

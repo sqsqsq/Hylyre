@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from typer.testing import CliRunner
@@ -54,31 +55,79 @@ def test_device_install_ok(mock_install: MagicMock, tmp_path: Path) -> None:
     mock_install.assert_called_once()
 
 
-@patch("hylyre.cli.commands.ai_cmd.HypiumDriver")
-def test_ai_tap_coordinate_mocked(mock_cls: MagicMock) -> None:
-    inst = MagicMock()
-    inst.connect = AsyncMock()
-    inst.touch = AsyncMock()
-    inst.close = AsyncMock()
-    mock_cls.return_value = inst
+@patch("hylyre.wiring.create_hypium_agent_with_env_vlm")
+def test_ai_tap_reaches_the_driver_and_returns_an_envelope(
+    mock_create: MagicMock,
+) -> None:
+    """`ai tap` is a protocol step now, not a bare driver poke."""
+
+    from hylyre.api.agent import HylyreAgent
+    from hylyre.contracts import RESULT_PROTOCOL, validate_against
+    from tests.contract.fakes.fake_ui_driver import FakeUiDriver
+
+    ui = FakeUiDriver()
+    mock_create.return_value = HylyreAgent(ui=ui)
     r = runner.invoke(app, ["ai", "tap", "--x", "1", "--y", "2"])
-    assert r.exit_code == 0, r.stdout + r.stderr
-    inst.touch.assert_awaited()
+    assert r.exit_code == 0, r.stdout
+
+    assert any(event[0] == "touch" for event in ui.events)
+    payload = json.loads(r.stdout)
+    assert payload["result_protocol"] == RESULT_PROTOCOL
+    assert payload["step_result"]["outcome"]["status"] == "passed"
+    assert validate_against("/$defs/stepResultV1", payload["step_result"]) == []
 
 
-@patch("hylyre.cli.commands.ai_cmd.HypiumDriver")
-def test_ai_input_mocked(mock_cls: MagicMock) -> None:
-    inst = MagicMock()
-    inst.connect = AsyncMock()
-    inst.input_text = AsyncMock()
-    inst.close = AsyncMock()
-    mock_cls.return_value = inst
-    r = runner.invoke(
-        app,
-        ["ai", "input", "hello", "--by-text", "user"],
-    )
-    assert r.exit_code == 0, r.stdout + r.stderr
-    inst.input_text.assert_awaited()
+@patch("hylyre.wiring.create_hypium_agent_with_env_vlm")
+def test_ai_input_reaches_the_driver_and_returns_an_envelope(
+    mock_create: MagicMock,
+) -> None:
+    from hylyre.api.agent import HylyreAgent
+    from hylyre.contracts import RESULT_PROTOCOL
+    from tests.contract.fakes.fake_ui_driver import FakeUiDriver
+
+    tree = {
+        "attributes": {"type": "Root", "bounds": "[0,0][500,800]"},
+        "children": [
+            {
+                "attributes": {
+                    "type": "TextInput",
+                    "id": "user_field",
+                    "text": "user",
+                    "bounds": "[0,0][200,40]",
+                },
+                "children": [],
+            }
+        ],
+    }
+    ui = FakeUiDriver(dump_tree=tree)
+    mock_create.return_value = HylyreAgent(ui=ui)
+    r = runner.invoke(app, ["ai", "input", "hello", "--by-text", "user"])
+    assert r.exit_code == 0, r.stdout
+
+    assert any(event[0] == "input_text" for event in ui.events)
+    payload = json.loads(r.stdout)
+    assert payload["result_protocol"] == RESULT_PROTOCOL
+    assert payload["step_result"]["outcome"]["status"] == "passed"
+
+
+@patch("hylyre.wiring.create_hypium_agent_with_env_vlm")
+def test_ai_action_failure_is_not_reported_as_success(
+    mock_create: MagicMock,
+) -> None:
+    """The public AI action entry must not turn a failure into "ok"."""
+
+    from hylyre.api.agent import HylyreAgent
+    from tests.contract.fakes.fake_ui_driver import FakeUiDriver
+    from tests.contract.fakes.fake_vlm_client import FakeVlmClient
+
+    ui = FakeUiDriver(dump_tree={"attributes": {"type": "Root", "bounds": "[0,0][9,9]"}, "children": []})
+    vlm = FakeVlmClient(responses=[{"action": {"type": "touch", "by_text": "nope"}}])
+    mock_create.return_value = HylyreAgent(ui=ui, vlm=vlm)
+
+    r = runner.invoke(app, ["ai", "action", "tap the missing thing"])
+    assert r.exit_code == 1, r.stdout
+    payload = json.loads(r.stdout)
+    assert payload["step_result"]["outcome"]["status"] == "failed"
 
 
 @patch("hylyre.wiring.create_hypium_agent_with_env_vlm")

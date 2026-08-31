@@ -326,8 +326,10 @@ def run_plan_batch(
             feature is not None or report_out is not None or trace_out is not None
         )
         fd = failure_dir
-        if fd is None and report_out is not None:
-            fd = Path(report_out).parent / "failures"
+        if fd is None and trace_out is not None:
+            # Beside the trace, so every recorded artifact path resolves from
+            # dirname(trace_path) alone — no working-directory dependency.
+            fd = Path(trace_out).parent / "failures"
         if wants_report:
             need = []
             if feature is None:
@@ -424,8 +426,8 @@ def run_plan_batch(
         typer.secho(f"Batch mode also requires: {', '.join(need)}", err=True)
         raise typer.Exit(2)
     fd_plan = failure_dir
-    if fd_plan is None and report_out is not None:
-        fd_plan = Path(report_out).parent / "failures"
+    if fd_plan is None and trace_out is not None:
+        fd_plan = Path(trace_out).parent / "failures"
     # P0-7B: reject a contract-invalid plan before any device call and before
     # --report-out/--trace-out are created.
     run_cmd.reject_plan_before_run(Path(plan))

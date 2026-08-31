@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -148,7 +149,39 @@ def test_resolved_outcome_skips_not_failed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_failure_dir_captures_artifacts(tmp_path: Path) -> None:
+async def test_failure_dir_captures_failure_boundary_artifacts(tmp_path: Path) -> None:
+    """A selector root failure inside a device session owes screen evidence."""
+
+    tree = {
+        "attributes": {"type": "Root", "bounds": "[0,0][100,100]"},
+        "children": [],
+    }
+    agent = HylyreAgent(ui=FakeUiDriver(dump_tree=tree))
+    batch = await steps_cmd.run_steps_on_agent(
+        agent,
+        [{"touch": {"by_text": "no such target"}}],
+        failure_dir=tmp_path,
+    )
+    row = batch["results"][0]
+    assert row["status"] == "error"
+    step = row["step_result"]
+    assert step["outcome"]["failure"]["domain"] == "selector"
+
+    kinds = {a["kind"] for a in step["artifacts"]}
+    assert {"ui_dump", "screenshot"} <= kinds
+    for artifact in step["artifacts"]:
+        # A reference is only ever produced from a file that exists, and its
+        # digest is computed from the bytes actually written.
+        written = tmp_path / Path(artifact["path"]).name
+        assert written.is_file()
+        assert artifact["sha256"] == hashlib.sha256(written.read_bytes()).hexdigest()
+        assert not Path(artifact["path"]).is_absolute()
+
+
+@pytest.mark.asyncio
+async def test_failure_boundary_obligation_does_not_spread(tmp_path: Path) -> None:
+    """Only selector/assertion root failures capture; the rule must stay narrow."""
+
     tree = {
         "attributes": {"type": "Root", "bounds": "[0,0][100,100]"},
         "children": [],
@@ -160,14 +193,12 @@ async def test_failure_dir_captures_artifacts(tmp_path: Path) -> None:
 
     agent = HylyreAgent(ui=FailUi(dump_tree=tree))
     batch = await steps_cmd.run_steps_on_agent(
-        agent,
-        [{"touch": {"x": 1, "y": 2}}],
-        failure_dir=tmp_path,
+        agent, [{"touch": {"x": 1, "y": 2}}], failure_dir=tmp_path
     )
-    assert batch["results"][0]["status"] == "error"
-    assert (tmp_path / "step-0.json").is_file()
-    assert (tmp_path / "step-0.png").is_file()
-    assert "failure_artifacts" in batch["results"][0]["error"]
+    step = batch["results"][0]["step_result"]
+    assert step["outcome"]["failure"]["code"] == "internal.unexpected_exception"
+    assert step["artifacts"] == []
+    assert not list(tmp_path.glob("*.png"))
 
 
 def _tree_node(attrs: dict, *children: dict) -> dict:

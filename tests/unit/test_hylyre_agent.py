@@ -173,11 +173,16 @@ async def test_ai_assert_fails() -> None:
     ui = FakeUiDriver()
     vlm = FakeVlmClient(responses=[{"ok": False, "reason": "missing"}])
     ag = HylyreAgent(ui=ui, vlm=vlm)
-    with pytest.raises(AssertionError, match="missing"):
-        try:
-            await ag.ai_assert("see home")
-        finally:
-            await ag.aclose()
+    try:
+        outcome = await ag.ai_assert("see home")
+    finally:
+        await ag.aclose()
+    # A mismatch is a value, not an exception: the assertion ran and did not
+    # match, so it is an assertion failure carrying its own observation.
+    assert outcome.outcome_dict()["status"] == "failed"
+    assert outcome.failure.code == "assertion.mismatch"
+    assert outcome.observation.matched is False
+    assert "missing" in (outcome.diagnostic or "")
 
 
 @pytest.mark.asyncio
@@ -293,5 +298,7 @@ def test_interpret_assert_payload_ok() -> None:
 
 
 def test_interpret_assert_payload_fails() -> None:
-    with pytest.raises(AssertionError, match="missing"):
-        HylyreAgent.interpret_assert_payload({"ok": False, "reason": "missing"})
+    outcome = HylyreAgent.interpret_assert_payload({"ok": False, "reason": "missing"})
+    assert outcome.outcome_dict()["status"] == "failed"
+    assert outcome.failure.code == "assertion.mismatch"
+    assert "missing" in (outcome.diagnostic or "")

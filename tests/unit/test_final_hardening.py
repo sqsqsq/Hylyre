@@ -46,7 +46,9 @@ async def test_uncovered_toast_cannot_verify_or_pass_trace(tmp_path: Path) -> No
     )
     case = result.case_results[0]
     assert case.steps[0].status == "passed"
-    assert case.steps[0].evidence["trigger_window_covered"] is False
+    # An uncovered trigger window is explicit non-verifying evidence: it does
+    # not flip `matched`, it downgrades the case evidence.
+    assert case.steps[0].observation["facts"]["trigger_window_covered"] is False
     assert case.execution == "completed"
     assert case.verification == "inconclusive"
     assert case.evidence == "incomplete"
@@ -123,8 +125,9 @@ async def test_normal_dynamic_row_contains_remains_addressable() -> None:
         },
     ):
         result = await agent.run_planned_tap({"touch": touch})
-        assert result["selector"]["selected_id"] == "balance-row"
-        assert result["selector"]["effective_match"] == "contains"
+        resolution = result.selector.resolution
+        assert resolution.state == "unique"
+        assert resolution.selected["id"] == "balance-row"
     assert [
         (event[1]["x"], event[1]["y"])
         for event in ui.events
@@ -156,8 +159,12 @@ async def test_nested_all_match_controls_execution_and_evidence() -> None:
             }
         }
     )
-    assert result["selector"]["requested_match"] == "exact"
-    assert result["selector"]["effective_match"] == "exact"
+    # The request records what the plan asked for, nesting included: here the
+    # match lives inside the `all` predicate, so that is where it is reported.
+    # The resolution records only what was found; the two are never conflated.
+    request = result.selector.request
+    assert request.constraints["all"][0]["match"] == "exact"
+    assert result.selector.resolution.state == "unique"
 
     inherited = await agent.run_planned_tap(
         {
@@ -167,8 +174,9 @@ async def test_nested_all_match_controls_execution_and_evidence() -> None:
             }
         }
     )
-    assert inherited["selector"]["requested_match"] == "exact"
-    assert inherited["selector"]["effective_match"] == "exact"
+    # A block-level match is reported at the top of the request.
+    assert inherited.selector.request.match == "exact"
+    assert inherited.selector.resolution.state == "unique"
     await agent.aclose()
 
 
@@ -217,7 +225,15 @@ async def test_blocked_suffix_preserves_assertion_root_and_actual_count() -> Non
     )
     assert result["executed"] == 1
     assert len(result["results"]) == 2
-    assert result["results"][0]["step_result"]["failure_code"] == "assertion_mismatch"
-    assert result["results"][1]["step_result"]["status"] == "blocked"
-    assert result["results"][1]["step_result"]["failure_kind"] == "assertion"
-    assert result["results"][1]["step_result"]["failure_code"] == "assertion_mismatch"
+
+    root = result["results"][0]["step_result"]
+    assert root["outcome"]["status"] == "failed"
+    assert root["outcome"]["failure"]["code"] == "assertion.mismatch"
+
+    # The suffix carries a *cause* pointing at the root, and no failure of its
+    # own. Copying the root's classification onto every unexecuted step is what
+    # turned one real failure into dozens of downstream defects under 0.3-p0.
+    suffix = result["results"][1]["step_result"]
+    assert suffix["outcome"]["status"] == "blocked"
+    assert suffix["outcome"]["cause"] == {"type": "prior_step", "step_index": 0}
+    assert "failure" not in suffix["outcome"]

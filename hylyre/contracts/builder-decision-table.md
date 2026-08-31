@@ -115,6 +115,8 @@
 | D-36 | 同上，但采集因设备/transport 不可用而失败 | 是 | `failed` | **不伪造 artifact**；`extensions["hylyre.capture"].screen="unavailable"`，且 CaseResult `evidence=incomplete` | `selector.not_found` | `step/valid/failed-selector-capture-unavailable.json` |
 | D-37 | device session 尚未建立时的 selector 失败 | 是 | `failed` | 不适用 failure-boundary artifact 必填条件（`device_session=false`） | `selector.not_found` | `step/valid/failed-selector-no-device-session.json` |
 
+**路径基准**：生成的 `artifacts[].path` **必须**相对于 authoritative trace 文件所在目录（`resolve(dirname(trace_path), path)`），因此 Hylyre 把 failure 目录放在 trace 旁，记录形如 `failures/<label>.png`。**禁止**写绝对路径或依赖当前工作目录；解析后不得逃逸该目录树。详见 `step-outcome-v1.md` §8.1。
+
 **约束**：该义务**只**覆盖 `failure.domain ∈ {selector, assertion}` 的真实根失败，**每个根失败最多一组** artifact。**禁止**扩张为每步截图、成功路径强制取证、blocked/skipped 重复截图，或因 artifact 机制新增第二份步骤 ledger。执行前 contract failure、`blocked/capability`、`blocked/infrastructure` 均不适用。
 
 ---

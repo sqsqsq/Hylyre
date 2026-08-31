@@ -111,8 +111,11 @@ async def test_selector_failure_keeps_typed_result_and_failed_outcome(tmp_path: 
         check_expected=False,
     )
     case = result.case_results[0]
-    assert case.steps[0].failure_kind == "selector"
-    assert case.steps[0].failure_code == "selector_not_found"
+    assert case.steps[0].failure == {
+        "domain": "selector",
+        "code": "selector.not_found",
+        "facts": {"resolver_code": "selector_not_found"},
+    }
     assert resolved_outcome(result) == "failed"
     report = tmp_path / "report.md"
     trace = tmp_path / "trace.json"
@@ -160,7 +163,7 @@ async def test_real_fragment_bounds_are_used_for_rich_text() -> None:
     )
     touch = [event for event in ui.events if event[0] == "touch"][-1][1]
     assert (touch["x"], touch["y"]) == (325, 25)
-    assert result["evidence"]["resolution_kind"] == "span_bounds"
+    assert result.observation.facts["resolution_kind"] == "span_bounds"
 
 
 @pytest.mark.asyncio
@@ -170,14 +173,39 @@ async def test_native_wait_return_contracts() -> None:
     with patch("hylyre.drivers.hypium.driver.load_hypium_shim", return_value=shim):
         driver = HypiumDriver()
         await driver.connect()
+        # A timeout is an observation, not an exception. Raising a selector
+        # error here is what put `failure.domain=selector` on an assertion row
+        # on real hardware — the contradiction the protocol exists to remove.
         raw.wait_for_component.return_value = None
-        with pytest.raises(SelectorResolutionError) as missing:
-            await driver.wait_for_selector(by_id="missing", timeout=2)
-        assert "missing" in str(missing.value)
-        assert "2.0" in str(missing.value)
+        absent = await driver.wait_for_selector(by_id="missing", timeout=2)
+        assert absent["evidence"]["observed_present"] is False
+
         raw.wait_for_component_disappear.return_value = object()
-        with pytest.raises(AssertionMismatch):
-            await driver.wait_for_selector_gone(by_id="present", timeout=2)
+        remains = await driver.wait_for_selector_gone(by_id="present", timeout=2)
+        assert remains["evidence"]["observed_present"] is True
+
+        # End to end, the agent classifies both as assertion mismatches that
+        # carry their own observation.
+        agent = HylyreAgent(ui=driver)
+        raw.wait_for_component.return_value = None
+        outcome = await agent.run_planned_wait_for(
+            {"wait_for": {"by_id": "missing", "timeout": 2}}
+        )
+        result = outcome.outcome_dict()
+        assert result["failure"] == {
+            "domain": "assertion",
+            "code": "assertion.mismatch",
+            "facts": {"assertion": "presence"},
+        }
+        assert result["observation"]["facts"]["observed_present"] is False
+        assert outcome.selector.resolution.state == "not_found"
+
+        outcome = await agent.run_planned_wait_gone(
+            {"wait_gone": {"by_id": "present", "timeout": 2}}
+        )
+        result = outcome.outcome_dict()
+        assert result["failure"]["domain"] == "assertion"
+        assert result["observation"]["facts"]["observed_present"] is True
 
 
 @pytest.mark.asyncio
@@ -304,18 +332,23 @@ def test_evidence_redaction_and_trace_report_case_set_validation(tmp_path: Path)
     trace = tmp_path / "trace.json"
     write_run_artifacts(result, report_path=report, trace_path=trace)
     data = json.loads(trace.read_text(encoding="utf-8"))
-    data["cases"][0]["steps"][0]["evidence"]["text"] = "secret account"
+    data["cases"][0]["steps"][0]["outcome"]["observation"]["facts"]["text"] = (
+        "secret account"
+    )
     trace.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     # A tampered trace is caught by the Markdown projection check, while the
     # serialized evidence path itself remains the redaction boundary.
-    with pytest.raises(ValueError, match="evidence mismatch"):
+    with pytest.raises(ValueError, match="outcome mismatch"):
         verify_report(report, trace, plan)
 
     write_run_artifacts(result, report_path=report, trace_path=trace)
     data = json.loads(trace.read_text(encoding="utf-8"))
     data["cases"].pop()
     trace.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    with pytest.raises(ValueError, match="case id set mismatch"):
+    # Dropping a case is now caught by the cross-row oracle (the tool_calls
+    # projection no longer matches) before the case-id set comparison runs;
+    # either way the tampered trace is rejected, not silently accepted.
+    with pytest.raises(ValueError, match="cross-row|case id set mismatch"):
         verify_report(report, trace, plan)
     assert redact_evidence({"text": "card 123", "amount": "100"}) == {
         "text": "[REDACTED]",
@@ -331,9 +364,14 @@ async def test_all_skipped_and_assertion_evidence(tmp_path: Path) -> None:
     result = await ScenarioRunner().run_plan_on_agent(
         HylyreAgent(ui=ui), skipped_plan, feature="skip", check_expected=False
     )
-    assert result.case_results[0].steps[0].status == "skipped"
-    assert result.case_results[0].steps[0].failure_kind == "capability"
-    assert result.case_results[0].steps[0].failure_code == "capability_unsupported"
+    step = result.case_results[0].steps[0]
+    # on_unsupported=skip is an explicit plan policy, so it is a reason, not a
+    # fabricated capability *failure* as 0.3-p0 recorded it.
+    assert step.status == "skipped"
+    assert step.reason["type"] == "policy"
+    assert step.reason["code"] == "optional_check.on_unsupported_skip"
+    assert step.reason["facts"]["probe_status"] == "unsupported"
+    assert step.failure is None
     assert resolved_outcome(result) != "success"
 
     assertion_plan = tmp_path / "assert.md"
@@ -347,7 +385,10 @@ async def test_all_skipped_and_assertion_evidence(tmp_path: Path) -> None:
     step = assertion_result.case_results[0].steps[0]
     assert step.role == "assertion"
     assert step.status == "passed"
-    assert step.evidence is not None
+    # A passing assertion must carry the observation that justifies it.
+    assert step.observation is not None
+    assert step.observation["assertion_type"] == "absence"
+    assert step.observation["matched"] is True
     assert assertion_result.case_results[0].verification == "passed"
 
 
@@ -387,7 +428,9 @@ async def test_steps_file_public_entry_emits_step_result() -> None:
     row = batch["results"][0]
     assert row["status"] == "ok"
     assert row["step_result"]["role"] == "assertion"
-    assert row["step_result"]["evidence"]["observed_present"] is True
+    observation = row["step_result"]["outcome"]["observation"]
+    assert observation["kind"] == "assertion"
+    assert observation["facts"]["observed_present"] is True
 
 
 def test_cli_plan_public_entry_writes_new_trace(tmp_path: Path) -> None:
@@ -411,7 +454,8 @@ def test_cli_plan_public_entry_writes_new_trace(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0, result.stdout
     data = json.loads(trace.read_text(encoding="utf-8"))
-    assert data["schema_version"] == "0.3-p0"
+    assert data["schema_version"] == "0.4-p0"
+    assert data["result_protocol"] == "hylyre.step-outcome/1"
     assert data["cases"][0]["steps"]
 
 
@@ -443,5 +487,10 @@ def test_fake_plan_does_not_claim_stub_assertion_as_verified(tmp_path: Path) -> 
     plan = tmp_path / "assertion.md"
     _write_plan(plan, '{"wait_for":{"by_id":"ready"}}')
     result = ScenarioRunner(use_fakes=True).run_plan_file(plan, feature="fake")
-    assert result.case_results[0].steps[0].status == "skipped"
-    assert result.case_results[0].verification == "inconclusive"
+    step = result.case_results[0].steps[0]
+    # The offline stub cannot observe a device, so it says so rather than
+    # emitting a green assertion row with no evidence behind it.
+    assert step.status == "blocked"
+    assert step.cause["type"] == "capability"
+    assert step.cause["capability_id"] == "fake.ui_observation"
+    assert result.case_results[0].verification == "failed"
