@@ -278,14 +278,70 @@ returning empty checks, SKIP, Chinese status, flat fields or `tool_calls`.
 - **WHEN** a trace declares an unrecognized `schema_version`, or `0.4-p0` with a mismatched protocol
 - **THEN** the read entry fails explicitly instead of falling back to legacy parsing
 
-## REMOVED Requirements
+### Requirement: CaseResult and StepResult trace shape
 
-### Requirement: Non-passing steps must carry a failure taxonomy
+`0.4-p0` trace cases SHALL retain `id`, `priority`, `ac_ref`, `notes`, and legacy
+`status`, and SHALL include `execution`, `verification`, `evidence`,
+`expected_check_mode` and a non-empty `steps[]`.
 
-**Reason**: `hylyre/harness/runner.py:151-157` required `failure_kind`/`failure_code`
-whenever `status != passed`, forcing unexecuted `blocked` steps and policy `skipped`
-steps to fabricate a failure classification. This is the direct cause of one root
-failure being amplified into many downstream defects.
+Each step SHALL include `index`, `kind`, `role`, `duration_ms`, `device_session`,
+`outcome`, `selector`, `artifacts`, `diagnostic` and `extensions`. The
+discriminated `outcome` replaces the flat `status`/`failure_kind`/`failure_code`/
+`evidence`/`error` fields entirely: there is no second, flat representation of
+the same facts, and top-level `additionalProperties` is closed.
 
-**Migration**: `blocked` carries `cause`, `skipped` carries `reason`, and neither carries
-`failure`. The rule is deleted rather than renamed or reimplemented elsewhere.
+The `0.3-p0` rule that a step SHALL carry `failure_kind`/`failure_code` whenever
+`status != passed` is **removed**, not renamed. It forced unexecuted `blocked`
+steps and policy `skipped` steps to fabricate a failure taxonomy, which is how a
+single root failure was amplified into dozens of downstream defects. `blocked`
+carries a `cause`, `skipped` carries a `reason`, and neither carries a `failure`.
+
+#### Scenario: Non-empty case has complete steps
+
+- **WHEN** a `0.4-p0` trace contains a case with planned or executed content
+- **THEN** it contains a non-empty `steps` array whose indexes are unique and whose roles/statuses use the contract enums
+
+#### Scenario: Duplicate identity is rejected
+
+- **WHEN** two cases share an id or two steps in one case share an index
+- **THEN** trace verification fails
+
+#### Scenario: An unexecuted step carries no failure
+
+- **WHEN** a step did not run because an earlier root outcome stopped the case
+- **THEN** it carries `cause` only, and schema validation rejects any `failure` on it
+
+### Requirement: Strict new trace evidence and explicit legacy labeling
+
+The `0.4-p0` schema SHALL require a `request`/`resolution` pair whenever
+`StepResult.selector` is non-null, SHALL require an observation for every
+`passed` step, SHALL enforce unique case IDs and step indexes, and SHALL verify
+that report case IDs, Markdown rows and `tool_calls` are derived from
+`CaseResult.steps[]`. The verifier and CLI/MCP output SHALL label `0.1-p0`,
+`0.2-p4` and `0.3-p0` traces as legacy and SHALL NOT describe them as v1
+evidence.
+
+The frozen 7-member flat failure-code enum is superseded by four namespaced code
+registries (`failure.code`, `cause.code`, `reason.code`,
+`resolution.reason_code`). An invalid match is now `contract.invalid_match`
+rather than being compressed into `selector_not_found` to preserve a closed enum.
+
+#### Scenario: Incomplete selector evidence is rejected
+
+- **WHEN** a trace changes a selector object to `{}`
+- **THEN** schema verification fails because `request` and `resolution` are absent
+
+#### Scenario: Duplicate identity is rejected
+
+- **WHEN** a trace repeats a case ID or repeats a step index within a case
+- **THEN** verification fails before reporting success
+
+#### Scenario: Legacy output is explicit
+
+- **WHEN** a legacy trace is verified
+- **THEN** verification may retain readable compatibility status but emits an explicit legacy/ineligible marker
+
+#### Scenario: Projections have one source
+
+- **WHEN** `tool_calls` or Markdown step data diverges from `cases[].steps[]`
+- **THEN** verification fails rather than trusting a second projection source
