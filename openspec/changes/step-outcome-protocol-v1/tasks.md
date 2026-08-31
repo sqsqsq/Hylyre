@@ -85,6 +85,27 @@
       out-of-range prior_step fixture renamed to match the branch it actually hits.
 - [x] Re-verified: `verify_contracts.py` OK, `python -m pytest -q` 738 passed.
 
+## Freeze record (Phase 0 handoff)
+
+Frozen at commit `1543c2649b058bf2935ffae12932c76bde89a49f` on branch `step-outcome-protocol-v1`.
+
+| Field | Value |
+|---|---|
+| `result_protocol` | `hylyre.step-outcome/1` |
+| trace `schema_version` | `0.4-p0` |
+| contract files | 223 |
+| `source.tree_sha256` | `e0833814cb9785cfba5fd0c4c934fad6ad98a6391f12cf252ed56996dee0df31` |
+| bundle | `hylyre-contracts-0.4-p0-e0833814cb97.zip` |
+| bundle sha256 | `e0e71b421e99d6f4d40acc4799007b14a4d45659839482ccb2fb46439a8a9849` |
+
+Rebuild the identical bundle with `python scripts/build_wheel.py --contracts --clean`
+(LF-normalized and deterministically zipped, so the hashes above are reproducible on
+any machine regardless of git `core.autocrlf`).
+
+**Phase 1 acceptance**: the 0.5.0 plain-source release manifest must report
+`contracts_tree_sha256` equal to `source.tree_sha256` above. If it differs, the shipped
+contracts are not the frozen ones and every differing file must be justified.
+
 ## Phase 1 — real 0.5.0 implementation (blocked on the Phase 0 review)
 
 - [ ] Transient `OperationOutcome` tagged union (`OperationPassed|Failed|Blocked|Skipped`).
