@@ -153,6 +153,7 @@ def execute_steps_scenario(
     on_fail: str = "abort",
     model_backend: str | None = None,
     failure_dir: Path | str | None = None,
+    use_fakes: bool = False,
 ) -> tuple[str, ScenarioRunResult]:
     """Run steps-file batch, emit plan-compatible report + trace, L5 verify."""
     from hylyre.cli.commands import steps_cmd
@@ -170,6 +171,7 @@ def execute_steps_scenario(
         params=params,
         failure_dir=failure_dir,
         artifact_base=Path(trace_out).parent,
+        use_fakes=use_fakes,
     )
     result = steps_batch_to_scenario_result(
         feature=feature,
@@ -177,8 +179,9 @@ def execute_steps_scenario(
         batch=batch,
         bundle=bundle,
         page_name=page_name,
+        use_fakes=use_fakes,
     )
-    mb = resolve_model_backend(model_backend, use_fakes=False)
+    mb = resolve_model_backend(model_backend, use_fakes=use_fakes)
     write_run_artifacts(
         result,
         report_path=report_out,

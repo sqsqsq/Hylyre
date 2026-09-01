@@ -52,6 +52,7 @@ def steps_batch_to_scenario_result(
     batch: dict[str, Any],
     bundle: str | None = None,
     page_name: str | None = None,
+    use_fakes: bool = False,
 ) -> ScenarioRunResult:
     """Map a steps-file batch to a plan-shaped result for report/trace emit.
 
@@ -91,5 +92,10 @@ def steps_batch_to_scenario_result(
         feature=feature,
         plan=plan,
         case_results=tuple(case_results),
-        use_fakes=False,
+        use_fakes=use_fakes,
+        environment=(
+            {"ui_driver": "fake", "hypium_version": "unavailable"}
+            if use_fakes
+            else None
+        ),
     )

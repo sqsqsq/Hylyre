@@ -68,6 +68,90 @@ class ScenarioRunResult:
         return tuple(tool_calls_projection(self.case_results))
 
 
+#: Facts that are true of the offline stub, not of a device.
+_STUB_EXTENSIONS = {FAKE_NAMESPACE: {"channel": "fake", "device": False}}
+
+
+def fake_step_outcome(
+    raw: Any,
+    *,
+    kind: str,
+    role: str,
+    forced: str | None = None,
+) -> Any:
+    """The offline stub's outcome for one planned step.
+
+    Shared by every fake entry (plan and steps-file), so "fake" means the same
+    thing everywhere: it changes where observations come from, never what the
+    protocol means. The stub never fabricates an assertion result, and every
+    row it produces carries a namespaced stub fact plus ``device_session=false``
+    so it can never be mistaken for device evidence.
+
+    ``forced`` carries a plan fixture's explicit intent (``skip``/``fail``/
+    ``block`` from a case-id suffix); a steps-file batch has no such marker.
+    """
+
+    if forced == "skip":
+        return OperationSkipped(
+            reason=Reason(
+                "policy",
+                "x_hylyre_fake.fixture_skip",
+                {"probe_status": "not_configured", "probe_source": "fake.runner"},
+            ),
+            extensions=_STUB_EXTENSIONS,
+            diagnostic="fake mode: skipped by fixture",
+        )
+    if forced == "fail":
+        if role == "assertion":
+            return OperationFailed(
+                failure=Failure("assertion", "assertion.mismatch"),
+                observation=presence_observed(False),
+                extensions=_STUB_EXTENSIONS,
+                diagnostic="fake mode: fixture forces failure",
+            )
+        return OperationFailed(
+            failure=Failure("selector", "selector.not_found"),
+            observation=ActionObservation(kind, False, {"channel": "fake"}),
+            # A stub claiming selector.not_found must show the same
+            # request/resolution shape a real run would, or it is useless as a
+            # consumer conformance gate.
+            selector=SelectorEvidence(
+                selector_request(_planned_selector_block(raw)),
+                SelectorResolution.not_found(),
+            ),
+            extensions=_STUB_EXTENSIONS,
+            diagnostic="fake mode: fixture forces failure",
+        )
+    if forced == "block":
+        return OperationBlocked(
+            cause=InfrastructureCause(
+                code="infrastructure.device_unavailable",
+                probe_status="unavailable",
+                probe_source="fake.runner",
+                resource_kind="device",
+            ),
+            extensions=_STUB_EXTENSIONS,
+            diagnostic="fake mode: blocked by fixture",
+        )
+    if role == "assertion":
+        # A stub has nothing to observe. Reporting a pass here is the
+        # empty-assertion false green the protocol exists to remove.
+        return OperationBlocked(
+            cause=CapabilityCause(
+                code="capability.not_configured",
+                capability_id="fake.ui_observation",
+                probe_status="not_configured",
+                probe_source="fake.runner",
+            ),
+            extensions=_STUB_EXTENSIONS,
+            diagnostic="fake mode: assertions are not observable offline",
+        )
+    return OperationPassed(
+        observation=ActionObservation(kind, True, {"channel": "fake"}),
+        extensions=_STUB_EXTENSIONS,
+    )
+
+
 def _planned_selector_block(raw: Any) -> dict[str, Any]:
     """The selector predicate a planned step asked for, for stub evidence."""
 
@@ -156,70 +240,14 @@ class ScenarioRunner:
                 continue
 
             upper = case.case_id.upper()
-            outcome: Any
+            forced: str | None = None
             if "跳过" in raw or upper.endswith("-SKIP"):
-                outcome = OperationSkipped(
-                    reason=Reason(
-                        "policy",
-                        "x_hylyre_fake.fixture_skip",
-                        {"probe_status": "not_configured", "probe_source": "fake.runner"},
-                    ),
-                    extensions=stub,
-                    diagnostic="fake mode: skipped by fixture",
-                )
+                forced = "skip"
             elif upper.endswith("-FAIL"):
-                outcome = (
-                    OperationFailed(
-                        failure=Failure("assertion", "assertion.mismatch"),
-                        observation=presence_observed(False),
-                        extensions=stub,
-                        diagnostic="fake mode: case id suffix -FAIL forces failure",
-                    )
-                    if role == "assertion"
-                    else OperationFailed(
-                        failure=Failure("selector", "selector.not_found"),
-                        observation=ActionObservation(kind, False, {"channel": "fake"}),
-                        # A stub claiming selector.not_found must show the same
-                        # request/resolution shape a real run would, or it is
-                        # useless as a consumer conformance gate.
-                        selector=SelectorEvidence(
-                            selector_request(_planned_selector_block(raw)),
-                            SelectorResolution.not_found(),
-                        ),
-                        extensions=stub,
-                        diagnostic="fake mode: case id suffix -FAIL forces failure",
-                    )
-                )
+                forced = "fail"
             elif upper.endswith("-BLOCK"):
-                outcome = OperationBlocked(
-                    cause=InfrastructureCause(
-                        code="infrastructure.device_unavailable",
-                        probe_status="unavailable",
-                        probe_source="fake.runner",
-                        resource_kind="device",
-                    ),
-                    extensions=stub,
-                    diagnostic="fake mode: blocked by fixture",
-                )
-            elif role == "assertion":
-                # A stub has nothing to observe. Reporting a pass here is the
-                # empty-assertion false green the protocol exists to remove.
-                outcome = OperationBlocked(
-                    cause=CapabilityCause(
-                        code="capability.not_configured",
-                        capability_id="fake.ui_observation",
-                        probe_status="not_configured",
-                        probe_source="fake.runner",
-                    ),
-                    extensions=stub,
-                    diagnostic="fake mode: assertions are not observable offline",
-                )
-            else:
-                outcome = OperationPassed(
-                    observation=ActionObservation(kind, True, {"channel": "fake"}),
-                    extensions=stub,
-                )
-
+                forced = "block"
+            outcome = fake_step_outcome(raw, kind=kind, role=role, forced=forced)
             step = build_step_result(
                 outcome, index=idx, kind=kind, role=role, device_session=False
             )

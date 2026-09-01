@@ -369,6 +369,7 @@ def run_plan_batch(
                     on_fail=on_fail,
                     model_backend=model_backend,
                     failure_dir=fd,
+                    use_fakes=use_fakes,
                 )
             except ValueError as exc:
                 typer.secho(f"verify_report failed: {exc}", err=True)
@@ -392,6 +393,7 @@ def run_plan_batch(
                 page_name=page_name,
                 wait_time=start_wait_time,
                 failure_dir=fd,
+                use_fakes=use_fakes,
             )
         except Exception as e:
             typer.secho(str(e), err=True)

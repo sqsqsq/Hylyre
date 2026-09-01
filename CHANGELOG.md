@@ -34,6 +34,11 @@ failure). One real root failure was amplified into 56 downstream defects.
 - Every entry (plan, fake, steps-file/batch, atomic CLI, MCP, session) builds
   rows through one builder; the offline stub no longer hand-assembles rows and
   no longer reports assertions it cannot observe.
+- `run --steps-file` / `--steps` honour `--use-fakes` through the same stub
+  outcome decision as the plan runner. The flag was previously accepted and
+  ignored on that path, so an offline smoke test silently connected to the
+  first available device; `--use-fakes` with `--session` is now refused rather
+  than silently resolved.
 - Contract package (`hylyre/contracts/`) ships the schema, the normative spec,
   the builder decision table, the reference reducer and 218 golden fixtures, all
   readable offline. `build_wheel.py --contracts` produces a non-installable

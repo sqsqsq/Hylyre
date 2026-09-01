@@ -160,6 +160,59 @@ async def run_steps_on_agent(
     )
 
 
+def run_steps_fake(
+    steps: list[dict[str, Any]],
+    on_fail: str = "abort",
+) -> dict[str, Any]:
+    """Offline stub for a steps batch: same builder, same protocol, no device.
+
+    ``--use-fakes`` used to be accepted and then ignored on this path, so the
+    run silently connected to the first available device. Fake mode now has a
+    real implementation here rather than a silent fallback.
+    """
+
+    from hylyre.scenario.runner import fake_step_outcome
+
+    mode = _normalize_on_fail(on_fail)
+    results: list[dict[str, Any]] = []
+    total = len(steps)
+    executed = 0
+    root_index: int | None = None
+
+    for idx, raw in enumerate(steps):
+        if not isinstance(raw, dict):
+            raise TypeError(f"steps[{idx}] must be object, got {type(raw).__name__}")
+        kind = planned_step_kind(raw)
+        role = planned_step_role(raw)
+
+        if root_index is not None and mode == "abort":
+            step_result = blocked_by_prior_step(
+                index=idx, kind=kind, role=role, root_index=root_index
+            )
+        else:
+            executed += 1
+            step_result = build_step_result(
+                fake_step_outcome(raw, kind=kind, role=role),
+                index=idx,
+                kind=kind,
+                role=role,
+                device_session=False,
+            )
+            if step_result.status in ("failed", "blocked") and root_index is None:
+                root_index = idx
+        results.append(step_result_to_batch_row(step_result, raw))
+
+    return batch_response(
+        {
+            "total": total,
+            "executed": executed,
+            "results": results,
+            "on_fail": mode,
+            "total_elapsed_ms": 0.0,
+        }
+    )
+
+
 def _batch_step_triggers_toast(
     steps: list[dict[str, Any]], index: int
 ) -> bool:
@@ -201,8 +254,19 @@ def execute_run_steps(
     params: str = "",
     failure_dir: str | Path | None = None,
     artifact_base: str | Path | None = None,
+    use_fakes: bool = False,
 ) -> dict[str, Any]:
-    """CLI/sync entry: IPC session daemon or ephemeral Hypium agent."""
+    """CLI/sync entry: offline stub, IPC session daemon, or ephemeral agent."""
+    if use_fakes:
+        if session_file is not None:
+            # A session *is* a live device connection, so combining it with
+            # fake mode has no coherent meaning. Say so instead of picking one.
+            raise ValueError(
+                "--use-fakes cannot be combined with --session: a session is a "
+                "live device connection"
+            )
+        # Decided before any agent is constructed: fake never reaches a device.
+        return run_steps_fake(steps, on_fail=on_fail)
     if session_file is not None:
         ipc_params: dict[str, Any] = {
             "steps": steps,

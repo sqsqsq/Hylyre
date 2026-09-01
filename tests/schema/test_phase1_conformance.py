@@ -809,3 +809,119 @@ async def test_mcp_atomic_with_failure_dir_writes_where_asked(
     ] in ("selector", "assertion"):
         assert requested.exists(), "the requested directory must be used"
         assert any(requested.rglob("*"))
+
+
+# ------------------------------- steps-file fake mode must never reach a device
+def test_steps_file_fake_mode_constructs_no_device_agent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--use-fakes`` was accepted and ignored here, so the run connected.
+
+    A silent fallback to a real device is worse than an unsupported flag: the
+    operator believes they ran offline while the harness drove hardware.
+    """
+
+    import hylyre.wiring as wiring
+
+    calls: list[str] = []
+
+    def boom(**kwargs):  # pragma: no cover - must never run
+        calls.append("agent")
+        raise AssertionError("fake mode must never construct a device agent")
+
+    # Patch the binding the batch path actually calls, not just the source
+    # module: loop_cmd imports the factory by name at import time.
+    monkeypatch.setattr(loop_cmd, "create_hypium_agent", boom)
+    monkeypatch.setattr(wiring, "create_hypium_agent_with_env_vlm", boom)
+    monkeypatch.setattr(wiring, "create_hypium_agent", boom)
+
+    batch = steps_cmd.execute_run_steps(
+        [{"touch": {"by_id": "ok"}}, {"wait": {"seconds": 0}}], use_fakes=True
+    )
+
+    assert calls == []
+    assert batch["result_protocol"] == RESULT_PROTOCOL
+    for row in batch["results"]:
+        step = row["step_result"]
+        assert validate_against("/$defs/stepResultV1", step) == []
+        assert step["device_session"] is False
+        # no 0.3 flat fields survive anywhere in the row
+        assert {"failure_kind", "failure_code", "evidence", "error"}.isdisjoint(step)
+
+
+def test_steps_file_without_fakes_still_uses_the_device_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real path must be untouched by the fake fix."""
+
+    used: list[str] = []
+    agent = HylyreAgent(
+        ui=FakeUiDriver(dump_tree=_root(_node({"type": "Button", "id": "ok"})))
+    )
+
+    def factory(**kwargs):
+        used.append("agent")
+        return agent
+
+    monkeypatch.setattr(loop_cmd, "create_hypium_agent", factory)
+
+    batch = steps_cmd.execute_run_steps([{"wait": {"seconds": 0}}])
+
+    assert used == ["agent"], "the device path must still build an agent"
+    assert batch["result_protocol"] == RESULT_PROTOCOL
+
+
+def test_fake_mode_and_a_live_session_are_refused_together() -> None:
+    """A session is a live connection; the combination has no meaning."""
+
+    with pytest.raises(ValueError, match="cannot be combined with --session"):
+        steps_cmd.execute_run_steps(
+            [{"wait": {"seconds": 0}}], use_fakes=True, session_file=Path("s.json")
+        )
+
+
+def test_steps_file_fake_report_is_protocol_conformant(tmp_path: Path) -> None:
+    """The offline batch still emits a v1 trace the verifier accepts."""
+
+    from hylyre.cli.commands import run_cmd
+
+    steps_path = tmp_path / "steps.json"
+    steps_path.write_text(
+        json.dumps([{"touch": {"by_id": "ok"}}, {"wait_for": {"by_id": "later"}}]),
+        encoding="utf-8",
+    )
+    report, trace = tmp_path / "r.md", tmp_path / "t.json"
+
+    _msg, result = run_cmd.execute_steps_scenario(
+        steps_path=steps_path,
+        steps=json.loads(steps_path.read_text(encoding="utf-8")),
+        feature="fake-steps",
+        report_out=report,
+        trace_out=trace,
+        use_fakes=True,
+    )
+
+    assert result.use_fakes is True
+    data = json.loads(trace.read_text(encoding="utf-8"))
+    assert data["schema_version"] == TRACE_SCHEMA_V1
+    assert data["result_protocol"] == RESULT_PROTOCOL
+    assert data["environment"]["selector_engine"] == "fake"
+    assert validate_against("", data) == []
+    assert reference_reducer.verify_trace(data) == []
+    for step in data["cases"][0]["steps"]:
+        assert step["device_session"] is False
+
+
+def test_plan_and_steps_fakes_share_one_outcome_decision() -> None:
+    """Both fake entries must mean the same thing by construction."""
+
+    from hylyre.scenario.runner import fake_step_outcome
+
+    action = fake_step_outcome({"touch": {"by_id": "x"}}, kind="touch", role="action")
+    assertion = fake_step_outcome(
+        {"wait_for": {"by_id": "x"}}, kind="wait_for", role="assertion"
+    )
+    assert action.outcome_dict()["status"] == "passed"
+    # A stub cannot observe, so it says so rather than emitting a green assertion.
+    assert assertion.outcome_dict()["status"] == "blocked"
+    assert assertion.outcome_dict()["cause"]["capability_id"] == "fake.ui_observation"
