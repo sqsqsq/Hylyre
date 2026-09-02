@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.5.1 — `hylyre run` option ownership: no more silent ignores
+
+Protocol, trace schema and the contract package are unchanged
+(`result_protocol: hylyre.step-outcome/1`, trace schema `0.4-p0`,
+`contracts_tree_sha256 = cc738c272324…`). This release is CLI-only.
+
+- `run --plan … --on-fail skip` (and any other non-default or invalid value) was
+  accepted and silently dropped: the plan path never forwarded `on_fail`, so the
+  run behaved exactly like one without the flag and gave no signal. It is now a
+  usage error before any device call, plan contract check or report/trace
+  creation: one stderr line naming `--on-fail` and `--plan`, exit `2`, empty
+  stdout. `--on-fail abort` (any case/whitespace, explicit or default) keeps
+  the byte-identical behaviour of omitting the flag. The plan runner does not
+  gain `on_fail` and `skip` is not implemented for plans: `blocked/prior_step`
+  ledger semantics stay frozen.
+- `run --help` now says what `--on-fail` means: `abort|skip` applies to
+  `--steps/--steps-file` only; `--plan` accepts only the default `abort`.
+- `run --steps/--steps-file … --on-fail <invalid>` is still judged by the same
+  normaliser (`on_fail must be abort or skip`), but as a usage error: exit code
+  `1` → `2`, and before the device agent is built or `--bundle` starts the app.
+  Previously the agent was constructed first, and report mode wrapped the
+  message in `verify_report failed:`.
+- Every option on the shared `run` callback is registered with the execution
+  paths that consume it (`plan`, `steps_report`, `steps_raw`, `subcommand`).
+  One central check runs on every path and rejects any non-default value the
+  path cannot consume; a value equal to the Click default passes through.
+  Newly rejected instead of silently ignored: plan × `--session`/`--out`;
+  steps report × `--out`/`--mock-group`/`--skip-assert-expected`; steps raw ×
+  `--mock-group`/`--skip-assert-expected`/`--model-backend`.
+- A callback option written before one of the 17 `run` subcommands
+  (`run --on-fail skip tap …`) was accepted and dropped by the callback's early
+  return. Non-default values are now a usage error there too; default-equivalent
+  values (`run --on-fail abort tap …`, `run --wait-time 1.0 tap …`) still pass,
+  and the options each subcommand declares itself keep binding to its handler.
+- Upstream conformance test (`tests/unit/test_run_option_ownership.py`) reads
+  the callback's option set and defaults from the Typer/Click command model and
+  reconciles them with the ownership fixture, so an unregistered 21st option or
+  a drifted default turns the suite red. Not shipped in the source release.
+
 ## 0.5.0 — Step Outcome Protocol v1 (breaking)
 
 **Breaking**: trace schema `0.3-p0` → `0.4-p0`, and every result envelope now

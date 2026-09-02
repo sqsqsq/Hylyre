@@ -26,6 +26,20 @@ The system SHALL ship a `hylyre` console script registering top-level commands: 
 - **WHEN** P4 build is complete
 - **THEN** help lists `--use-fakes`, `--device-sn`, `--bundle`, `--mock-port`, `--lyrebird-url`, `--mock-group`, `--skip-assert-expected`, and `--model-backend`
 
+#### Scenario: Run callback options are consumed or refused, never dropped
+
+- **GIVEN** an option declared on the shared `hylyre run` callback (`--plan`, `--steps`, `--steps-file`, `--on-fail`, `--out`, `--session`, `--page-name`, `--wait-time`, `--feature`, `--report-out`, `--trace-out`, `--use-fakes`, `--device-sn`, `--bundle`, `--mock-port`, `--lyrebird-url`, `--mock-group`, `--skip-assert-expected`, `--model-backend`, `--failure-dir`) and the execution path selected by the argv (`--plan`; `--steps/--steps-file` with or without `--feature/--report-out/--trace-out`; or a `run <subcommand>`)
+- **WHEN** the option's effective value differs from its declared default and that path does not consume it
+- **THEN** the command exits `2` with one stderr line naming the option and the path, writes nothing to stdout, contacts no device, and neither creates nor rewrites `--report-out` / `--trace-out`
+- **AND** a value equal to the declared default passes through unchanged, including when written before a subcommand (`run --on-fail abort tap …`)
+
+#### Scenario: `--on-fail` is a steps-batch option only
+
+- **GIVEN** `hylyre run --help`
+- **WHEN** the operator reads `--on-fail`
+- **THEN** help states that `abort|skip` applies to `--steps/--steps-file` only and that `--plan` accepts only the default `abort`
+- **AND** `run --plan … --on-fail skip` (or any invalid value) is the usage error above, and `run --steps/--steps-file … --on-fail <invalid>` exits `2` with `on_fail must be abort or skip` before any device call
+
 #### Scenario: Progress helpers
 
 - **GIVEN** a developer runs `hylyre progress --help`
