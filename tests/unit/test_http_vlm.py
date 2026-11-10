@@ -7,6 +7,7 @@ import respx
 from httpx import Response
 
 from hylyre.vlm.http_vlm import HttpVlmClient
+from tests.image_samples import png_bytes
 
 URL = "https://api.example.com/v1/chat/completions"
 
@@ -27,7 +28,7 @@ async def test_http_vlm_parses_content() -> None:
     client = HttpVlmClient(endpoint=URL)
     out = await client.vision_json(
         instruction="tap",
-        screenshot_png=b"\x89PNG\r\n\x1a\n",
+        screenshot_png=png_bytes(),
         response_schema="tap",
     )
     assert out == {"touch": {"x": 3, "y": 4}}

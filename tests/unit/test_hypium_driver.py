@@ -105,11 +105,16 @@ async def test_hypium_locate_by_text(mock_load: MagicMock) -> None:
 @pytest.mark.asyncio
 @patch("hylyre.drivers.hypium.driver.load_hypium_shim")
 async def test_hypium_screenshot_reads_file(mock_load: MagicMock, tmp_path) -> None:
+    from tests.image_samples import image_bytes
     raw = MagicMock()
+    captured_paths = []
+    jpeg = image_bytes("JPEG")
 
     def _capture(path: str, in_pc: bool, area) -> str:
         p = __import__("pathlib").Path(path)
-        p.write_bytes(b"abc")
+        assert p.suffix == ".jpeg"
+        captured_paths.append(p)
+        p.write_bytes(jpeg)
         return str(p)
 
     raw.capture_screen.side_effect = _capture
@@ -117,7 +122,11 @@ async def test_hypium_screenshot_reads_file(mock_load: MagicMock, tmp_path) -> N
     d = HypiumDriver()
     await d.connect()
     data = await d.screenshot()
-    assert data == b"abc"
+    assert data == jpeg
+    assert captured_paths and not captured_paths[0].exists()
+    raw.capture_screen.side_effect = RuntimeError("capture failed")
+    with pytest.raises(RuntimeError, match="capture failed"):
+        await d.screenshot()
 
 
 @pytest.mark.asyncio

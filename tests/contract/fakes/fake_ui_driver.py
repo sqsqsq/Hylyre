@@ -161,13 +161,9 @@ class FakeUiDriver(UiDriverBase):
 
     async def screenshot(self) -> bytes:
         self.events.append(("screenshot", {}))
-        # 1×1 transparent PNG (valid minimal payload for tests)
-        return (
-            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
-            b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
-            b"\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01"
-            b"\r\n-\xdb\x00\x00\x00\x00IEND\xaeB`\x82"
-        )
+        from tests.image_samples import png_bytes
+
+        return png_bytes()
 
     async def dump_ui(self) -> dict[str, Any]:
         self.events.append(("dump_ui", {}))

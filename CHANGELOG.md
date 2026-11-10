@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.5.2 — Validated screenshot formats and atomic output
+
+- Screenshot `.png`, `.jpg` and `.jpeg` output (case-insensitive) now uses the
+  requested encoding and exact path, including CLI sessions and failure diagnostics.
+  Unsupported or missing suffixes fail before capture/session IPC; no silent rename.
+- All image consumers (CLI bytes, daemon, MCP and VLM) verify PNG/JPEG structure
+  and reopen/load the complete image. Empty, forged, corrupt and truncated images
+  fail instead of being labelled PNG. Valid byte response shapes remain unchanged.
+  A JPEG carrying an MPF (multi-picture) segment, which Pillow reports as MPO,
+  is accepted as `image/jpeg` like any other JPEG.
+- Same-format output keeps original bytes; conversion keeps dimensions/content.
+  JPEG quality is 95; transparent PNG pixels are composited onto white.
+  Sixteen-bit grayscale PNG uses fixed 0..65535 to 0..255 scaling for JPEG,
+  retaining brightness levels without per-image contrast normalization.
+- Invalid input errors identify the screenshot as invalid PNG/JPEG and retain
+  the original cause/exception chain; dependency and output I/O errors keep
+  their existing classification.
+- Image output uses a closed temporary file in the target directory and atomic
+  replacement. Failed capture/validation/encoding/writing leaves no partial target
+  or success reference and preserves any old valid target. The published file
+  gets the mode a plain write would give (`0666` minus the process umask), not
+  the owner-only mode of the temporary file. Diagnostic failure
+  keeps the original business outcome and successful UI dump.
+- Pillow>=11,<13 is a core runtime dependency, installed by ordinary base and
+  `[device,mcp]` installs. Missing dependencies follow existing error handling
+  (CLI ImportError exit 2; other screenshot errors exit 1, no success stdout).
+- Version 0.5.2 uses the existing schema 2 source-release workflow. Step Outcome
+  Protocol, trace schema, selectors and contract package are unchanged.
+- Acceptance and installation evidence: [0.5.2 report](docs/releases/0.5.2-acceptance.md).
+
 ## 0.5.1 — `hylyre run` option ownership: no more silent ignores
 
 Protocol, trace schema and the contract package are unchanged
