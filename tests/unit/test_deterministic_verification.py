@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from enum import Enum
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -35,9 +36,12 @@ def _root(*children: dict[str, Any]) -> dict[str, Any]:
     return _node({"type": "Root", "bounds": "[0,0][500,800]"}, *children)
 
 
-def _fake_shim(raw: MagicMock) -> MagicMock:
-    from hypium.model import MatchPattern
+class _MatchPattern(Enum):
+    EQUALS = "equals"
+    CONTAINS = "contains"
 
+
+def _fake_shim(raw: MagicMock) -> MagicMock:
     ui_driver = MagicMock()
     ui_driver.connect.return_value = raw
     by = MagicMock()
@@ -49,7 +53,7 @@ def _fake_shim(raw: MagicMock) -> MagicMock:
     shim.UiDriver = ui_driver
     shim.BY = by
     shim.hypium_mod = MagicMock()
-    shim.hypium_mod.MatchPattern = MatchPattern
+    shim.hypium_mod.MatchPattern = _MatchPattern
     shim.hypium_mod.__version__ = "6.0.7.210"
     return shim
 
@@ -210,22 +214,22 @@ async def test_native_wait_return_contracts() -> None:
 
 @pytest.mark.asyncio
 async def test_native_match_pattern_is_forwarded() -> None:
-    from hypium.model import MatchPattern
-
     raw = MagicMock()
     shim = _fake_shim(raw)
     with patch("hylyre.drivers.hypium.driver.load_hypium_shim", return_value=shim):
         driver = HypiumDriver()
         await driver.connect()
         await driver.touch(by_text="协议", match="contains")
-        assert shim.BY.text.call_args.args == ("协议", MatchPattern.CONTAINS)
+        assert shim.BY.text.call_args.args == ("协议", _MatchPattern.CONTAINS)
+        await driver.touch(by_text="协议", match="exact")
+        assert shim.BY.text.call_args.args == ("协议", _MatchPattern.EQUALS)
         with pytest.raises(SelectorResolutionError):
             await driver.touch(by_text="协议", match="typo")
         with pytest.raises(SelectorResolutionError):
             await driver.touch(by_text="协议", match="starts_with")
         raw.wait_for_component.return_value = object()
         await driver.wait_for_selector(by_text="协议")
-        assert shim.BY.text.call_args.args == ("协议", MatchPattern.CONTAINS)
+        assert shim.BY.text.call_args.args == ("协议", _MatchPattern.CONTAINS)
         raw.find_all_components.return_value = [object(), object()]
         with pytest.raises(SelectorResolutionError) as ambiguous:
             await driver.touch(by_id="duplicate")

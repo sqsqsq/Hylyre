@@ -29,6 +29,7 @@ from typing import Any
 
 import pytest
 import typer.main as typer_main
+from click import unstyle
 from typer.testing import CliRunner
 
 import hylyre.wiring as wiring
@@ -609,14 +610,23 @@ def test_plan_runner_boundary_has_no_on_fail_parameter() -> None:
     assert "on_fail" not in inspect.signature(ScenarioRunner.run_plan_on_agent).parameters
 
 
-def test_run_help_documents_on_fail_scope() -> None:
-    result = runner.invoke(app, ["run", "--help"], env={"COLUMNS": "400"})
+@pytest.mark.parametrize(
+    "env,color",
+    [
+        ({"COLUMNS": "400", "NO_COLOR": "1"}, False),
+        ({"COLUMNS": "80", "FORCE_COLOR": "1", "TERM": "xterm-256color"}, True),
+    ],
+    ids=["plain-wide", "colored-wrapped"],
+)
+def test_run_help_documents_on_fail_scope(env: dict[str, str], color: bool) -> None:
+    result = runner.invoke(app, ["run", "--help"], env=env, color=color)
     assert result.exit_code == 0
-    line = next(l for l in result.output.splitlines() if "--on-fail" in l)
-    assert "abort|skip" in line
-    assert "--steps/--steps-file" in line
-    assert "--plan accepts only the default abort" in line
-    assert "usage error" in line
+    text = " ".join(unstyle(result.output).replace("│", " ").split())
+    assert "--on-fail" in text
+    assert "abort|skip" in text
+    assert "--steps/--steps-file" in text
+    assert "--plan accepts only the default abort" in text
+    assert "usage error" in text
 
 
 # ------------------------------------------ steps paths: on_fail semantics stay
