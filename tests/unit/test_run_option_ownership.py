@@ -830,7 +830,10 @@ def test_subcommand_spy_negative_self_check(
 def test_package_version_matches_pyproject() -> None:
     """The release script pins manifest == pyproject; this pins __version__ too."""
 
-    import tomllib
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
 
     import hylyre
 
