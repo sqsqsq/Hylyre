@@ -19,7 +19,9 @@ async def test_mcp_tool_inventory() -> None:
     mcp = build_mcp()
     tools = await mcp.list_tools()
     names = {t.name for t in tools}
-    assert len(names) == 43
+    from hylyre.api.common_operation_contract import COMMON_OPERATION_KEYS
+    assert len(names) == 43 + len(COMMON_OPERATION_KEYS)
+    assert {f"hylyre_run_{key}" for key in COMMON_OPERATION_KEYS} <= names
     expected = {
         "hylyre_run_plan",
         "hylyre_report_verify",
@@ -65,6 +67,7 @@ async def test_mcp_tool_inventory() -> None:
         "hylyre_mock_activate",
         "hylyre_progress_show",
     }
+    expected.update(f"hylyre_run_{key}" for key in COMMON_OPERATION_KEYS)
     assert names == expected
     desc_lens = [len((t.description or "")) for t in tools]
     assert max(desc_lens) < 2000

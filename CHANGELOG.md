@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 — 2026-11-14 — 常用设备操作
+
+- 扩展 touch normal/long/double；新增拖拽、点到点滑动、原生 fling、pinch、双指/多点/连续轨迹、按键/组合键、清空/光标、属性/幂等勾选、应用查询/最近任务和结构化设备 Shell，贯通 CLI/MCP/plan/steps/session。
+- 布尔过滤新增 checked/checkable/focused；clickable/enabled/scrollable 的显式 false 从忽略改成精确过滤，输入统一只接受 JSON 布尔。依赖旧忽略行为的调用应移除字段；布尔字符串应改成布尔。
+- 计划 JSON 内分号/转义换行不再错误拆步，表格支持标准 `\|` 转义。查询不增加断言覆盖，无设备 fake 不制造属性/应用/Shell 事实。
+- 属性查询/清空/勾选使用文本实际匹配节点；仅含checked/checkable/focused（含嵌套）的状态等待切到实际节点，其它旧rich等待及点击保留原升父语义。点击后状态确认异常保留已执行事实；不适用目标或手势边界违例归contract.invalid_step。HMOS三键不降级为两键，能力无法确认时阻塞。
+- **兼容性**：产品版本更新为0.6.0，旧步骤未指定新参数时保持原默认行为；显式布尔false现在精确过滤，字符串布尔须改为JSON布尔。合法index下完整谓词零匹配进入等待的presence/absence判断，非空越界和动作索引规则不变。Step Outcome Protocol仍为`hylyre.step-outcome/1`、trace schema仍为`0.4-p0`，source-release manifest schema 2与contracts-freeze manifest schema 3保持不变。
+- 使用方式、默认值和版本限制见 [常用设备操作](docs/common-device-operations.md)。软件验证与真机验收状态分开记录，未自动发布。
+
+
 ## 0.5.2 — Validated screenshot formats and atomic output
 
 - Screenshot `.png`, `.jpg` and `.jpeg` output (case-insensitive) now uses the

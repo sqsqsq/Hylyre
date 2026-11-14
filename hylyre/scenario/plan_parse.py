@@ -83,8 +83,8 @@ def parse_test_plan(path: Path | str) -> ParsedPlan:
 
 
 def _split_row(line: str) -> list[str]:
-    raw = line.strip().strip("|").split("|")
+    raw = re.split(r"(?<!\\)\|", line.strip().strip("|"))
     return [
-        normalize_planned_step_text(c.replace("<br/>", " ").strip()) for c in raw
+        normalize_planned_step_text(c.replace(r"\|", "|").replace("<br/>", " ").strip()) for c in raw
     ]
 

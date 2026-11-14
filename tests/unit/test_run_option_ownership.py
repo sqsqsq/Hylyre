@@ -199,6 +199,9 @@ SUBCOMMANDS: dict[str, tuple[str, list[str]]] = {
     "scroll-to": ("run_planned_step_json", ["--json", '{"scroll_to":{"by_id":"x"}}']),
     "start-app-step": ("run_planned_step_json", ["--json", '{"start_app":{"bundle":"b"}}']),
 }
+from hylyre.api.common_operation_contract import COMMON_OPERATION_EXAMPLES
+SUBCOMMANDS.update({key.replace("_", "-"): ("run_planned_step_json", ["--json", json.dumps({key: block})])
+                    for key, block in COMMON_OPERATION_EXAMPLES.items()})
 REPRESENTATIVE_SUBCOMMAND = "tap"
 REPRESENTATIVE_PARENT_OPTION = "on_fail"
 
@@ -379,7 +382,7 @@ def test_negative_self_check_broken_fixture_fails_reconciliation(mutate) -> None
 
 def test_subcommand_table_matches_registered_run_subcommands() -> None:
     assert set(SUBCOMMANDS) == set(typer_main.get_command(run_app).commands)
-    assert len(SUBCOMMANDS) == 17
+    assert len(SUBCOMMANDS) == 17 + len(COMMON_OPERATION_EXAMPLES)
 
 
 # ----------------------------------------------------- supported path: reaches

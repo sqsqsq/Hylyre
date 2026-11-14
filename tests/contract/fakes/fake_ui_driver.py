@@ -60,6 +60,8 @@ class FakeUiDriver(UiDriverBase):
         by_id: str | None = None,
         match: str | None = None,
         wait_time: float = 0.1,
+        mode: str = "normal",
+        press_time: float | None = None,
     ) -> None:
         from hylyre.api.selector_contract import normalize_match
 
@@ -94,6 +96,10 @@ class FakeUiDriver(UiDriverBase):
             "by_id": by_id,
             "wait_time": wait_time,
         }
+        if mode != "normal":
+            event["mode"] = mode
+        if press_time is not None:
+            event["press_time"] = press_time
         if match is not None:
             event["match"] = match
         if resolved_center is not None:
@@ -483,3 +489,42 @@ class FakeUiDriver(UiDriverBase):
         self.toast_listening = True
         self.events.append(("start_toast_listening", {}))
         return {"channel": "fake.toast", "listener_started": True}
+
+    async def drag(self, **kwargs: Any) -> None:
+        self.events.append(("drag", kwargs))
+
+    async def slide(self, **kwargs: Any) -> None:
+        self.events.append(("slide", kwargs))
+
+    async def fling(self, **kwargs: Any) -> None:
+        self.events.append(("fling", kwargs))
+
+    async def pinch_in(self, **kwargs: Any) -> None:
+        self.events.append(("pinch_in", kwargs))
+
+    async def pinch_out(self, **kwargs: Any) -> None:
+        self.events.append(("pinch_out", kwargs))
+
+    async def two_finger_swipe(self, **kwargs: Any) -> None:
+        self.events.append(("two_finger_swipe", kwargs))
+
+    async def multi_finger_touch(self, **kwargs: Any) -> None:
+        self.events.append(("multi_finger_touch", kwargs))
+
+    async def gesture(self, **kwargs: Any) -> None:
+        self.events.append(("gesture", kwargs))
+
+    async def press_key(self, **kwargs: Any) -> None:
+        self.events.append(("press_key", kwargs))
+
+    async def press_combination_key(self, **kwargs: Any) -> None:
+        self.events.append(("press_combination_key", kwargs))
+
+    async def clear_text(self, **kwargs: Any) -> None:
+        self.events.append(("clear_text", kwargs))
+
+    async def move_cursor(self, **kwargs: Any) -> None:
+        self.events.append(("move_cursor", kwargs))
+
+    async def recent_tasks(self, **kwargs: Any) -> None:
+        self.events.append(("recent_tasks", kwargs))

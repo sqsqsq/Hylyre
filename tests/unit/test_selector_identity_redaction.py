@@ -483,3 +483,35 @@ def test_cli_steps_file_final_trace_uses_same_identity_ledger(
             "outcome": {"status": "passed"},
         }
     ]
+
+
+@pytest.mark.parametrize("property_name", ["enabled", "focused", "clickable", "scrollable", "checked", "checkable"])
+@pytest.mark.parametrize("value", [True, False])
+def test_component_boolean_query_preserves_type_without_exposing_target_text(property_name, value):
+    step = build_step_result(
+        OperationPassed(observation=ActionObservation("get_component_property", True, {
+            "property": property_name, "value": value,
+            "target": {"id": "checkbox", "text": f"account: {SECRET}"},
+        })), index=0, kind="get_component_property", role="action",
+    )
+    encoded = step.to_dict()
+    facts = encoded["outcome"]["observation"]["facts"]
+    assert facts["value"] is value
+    assert facts["target"]["text"] == "[REDACTED]"
+    assert SECRET not in _json(encoded)
+    assert step.observation["facts"]["value"] is value
+
+
+@pytest.mark.parametrize("kind,property_name,value", [
+    ("get_component_property", "text", f"account: {SECRET}"),
+    ("get_component_property", "text", False),
+    ("get_component_property", "checked", "false"),
+    ("other_query", "checked", False),
+    ("get_component_property", ["checked"], False),
+])
+def test_boolean_query_exception_does_not_widen_text_or_generic_value_redaction(kind, property_name, value):
+    step = build_step_result(
+        OperationPassed(observation=ActionObservation(kind, True, {"property": property_name, "value": value})),
+        index=0, kind=kind, role="action",
+    )
+    assert step.to_dict()["outcome"]["observation"]["facts"]["value"] == "[REDACTED]"

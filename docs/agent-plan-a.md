@@ -19,9 +19,9 @@
 ## 2. 「测试步骤」列：只放 JSON 行
 
 - 每一**条**被执行的逻辑对应一行 **单行 JSON**（一行内不要换行）。
-- **多条**步骤可在同一单元格里用 **英文分号 `;` 或中文分号 `；`** 分隔，解析器会先换成换行再逐条执行（见 `_iter_steps`）。
+- **多条**步骤可在同一单元格里用 **英文分号 `;` 或中文分号 `；`** 分隔，公共切分器仅在 JSON 对象外分步；JSON 字符串内分号、转义换行和格式化对象不会拆步。
 - 不要使用 `<br/>` 拆步骤：解析时 `<br/>` 会被替换成空格，多段 JSON 会粘在一起。
-- **避免** 在任意列里出现未转义的 **竖线 `|`**：表格按 `|` 切列，会破坏 7 列对齐。JSON 里的文案若含 `|`，改用别表述或 `by_id`。
+- **避免** 在任意列里出现未转义的 **竖线 `|`**：表格按 `|` 切列，会破坏 7 列对齐。JSON 里的文案或 Shell 管道使用标准 Markdown `\|` 转义，解析后还原为 `|`（也可用 JSON `\u007c`）。
 - **禁止** 用 markdown **反引号** 或 ` ``` ` 围栏包裹 JSON（如 `` `{"touch":…}` ``）；解析器会尽量剥离，但表格中应直接写裸 JSON。
 - **禁止** 把 CLI 子命令名（`tap`、`swipe` 等）当作 JSON 根键；根键必须是下表中的 planned 键名。
 
@@ -180,3 +180,8 @@ hylyre run \
 - **[`.cursor/rules/hylyre.mdc`](../.cursor/rules/hylyre.mdc)**：`alwaysApply`，约束 Agent 的调用优先级（MCP → CLI、做法 A / 原子循环、何时要 VLM）。
 - **[`.cursor/rules/hylyre-plan-a.mdc`](../.cursor/rules/hylyre-plan-a.mdc)**：编辑 `*test-plan*.md` 时触发，细化 JSON 步骤格式。
 - **[`agent-loop.md`](./agent-loop.md)**：原子循环模式（dump-ui / screenshot + 增量报告）。
+
+
+## 常用设备操作扩展
+
+长按/双击、drag/slide/fling/pinch、双指/多指/连续轨迹、按键/组合键、清空/光标、属性/勾选、应用查询/最近任务及 Shell 的全部根键和可复制 JSON 见 [常用设备操作](common-device-operations.md)。全部复用计划、steps、原子 CLI/MCP 和 session；查询不增加断言覆盖率。checked/checkable/focused 及已有布尔过滤的 false 语义、Hypium/API 限制见同页。

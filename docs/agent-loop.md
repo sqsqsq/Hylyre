@@ -212,9 +212,9 @@ MCP：**`hylyre_run_scroll_to`**（payload 根键须含 `scroll_to` 或整步对
 排序：**overlay 越靠上越优先** → **`clickable`** → **`enabled`** → 树序。排序只用于可观察候选顺序；action 多命中时 fail-closed 为 `selector_ambiguous`，并写 **候选摘要** 到 `SelectorResolutionError`。只有显式 `index`/`scope`/`within`/`all` 能消歧。
 
 - **文本抬升**：普通 Text 叶节点可向上找最近 **`clickable=true`**（再 bounded enabled）祖先；聚合富文本片段没有真实 bounds/semantic action 时不得抬升点击父 Text/Row。
-- **`all` (AND)**：`by_text` 先抬升，再对抬升后的目标应用 `by_type`/`clickable` 等谓词。
+- **`all` (AND)**：点击及不含新状态约束的旧 rich 等待中，`by_text` 先抬升，再对抬升后的目标应用 `by_type`/`clickable` 等谓词。
 - **`scope:"top_overlay"`**：启发式取最上层 Sheet/Dialog/Popup 子树（HarmonyOS `bindSheet` 场景）。
-- **`wait_for` / `wait_gone`**：含富字段时轮询 dump+解析；纯单属性仍走 Hypium `wait_for_component`。
+- **`wait_for` / `wait_gone`**：含富字段时轮询 dump+解析；仅当含 `checked`/`checkable`/`focused`（含嵌套）时，整条谓词按实际匹配节点判断，不抬升。其它旧 rich 等待保持原抬升语义；组件查询/清空/勾选设置始终使用实际匹配节点。纯单属性仍走 Hypium `wait_for_component`。
 - **`input`**（0.4.0+）：`by_text`、`by_type`/`by_key`/富字段或 **`into`** → 统一解析 → **touch 聚焦** → **当前光标输入**；`by_id` 可走原生；无选择器时落当前聚焦框。所有文本 selector 都显式遵循 `exact`/`contains`。
 
 逃生：**`prefer_native_text:true`** 恢复旧 `by_text` 原生行为。
@@ -268,3 +268,8 @@ Tier A 单步工具（如 **`hylyre_run_scroll_to`**）可选 **`failure_dir`**�
 ## 何时仍需要 Hylyre 内置 VLM
 
 仅当外部 Agent **既无法消费截图也无法消费控件树**，且仍要写 **自然语言步骤**（非 JSON）时，才配置 `HYLYRE_VLM_*` 并使用 `hylyre ai action` / **`hylyre_ai_*`** MCP 工具。默认推荐：**不配 VLM**，由外部 Agent + 本页的 dump-ui/screenshot 完成感知。
+
+
+## 常用设备操作扩展
+
+[常用设备操作](common-device-operations.md) 提供本批完整 JSON 示例、默认值和能力限制。原子 CLI 统一 `hylyre run <kebab-name> --json`；MCP 统一 `hylyre_run_<snake_name>`，touch 仍用 tap。复杂多指/轨迹优先步骤文件，所有目标在注入前解析，先滚动请显式 scroll_to。查询事实不替代 wait_for/wait_gone 断言；无观测 fake 会阻塞查询/状态/Shell。长按显式时长、布尔 false 精确过滤、Shell 输出/退出码和证据规则见操作说明。
