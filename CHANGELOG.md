@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 — 2026-11-14 — Markdown 计划字符串保真
+
+- 修复 `parse_test_plan` 对整列替换 `<br/>`，导致合法 Shell/input JSON 字符串原文被改为空格。特殊保护仅用于测试步骤列的 JSON 字符串，保留转义引号、反斜杠、中英文分号、多步骤与标准 `\|` 管道转义。
+- 其它列及步骤 JSON 字符串外 `<br/>` 仍为空格，不新增步骤分隔含义；现有反引号/围栏包装、其它换行标记写法和普通 Markdown 行为不变。真实表格入口回归覆盖原始 `printf '%s' '<br/>'`、Shell/input 精确往返、整格/混合包装与兼容反例。
+- 产品版本更新为 0.6.1；历史版本、`hylyre.step-outcome/1`、trace schema `0.4-p0` 和独立 manifest schema 保持不变。
+
 ## 0.6.0 — 2026-11-14 — 常用设备操作
 
 - 扩展 touch normal/long/double；新增拖拽、点到点滑动、原生 fling、pinch、双指/多点/连续轨迹、按键/组合键、清空/光标、属性/幂等勾选、应用查询/最近任务和结构化设备 Shell，贯通 CLI/MCP/plan/steps/session。
