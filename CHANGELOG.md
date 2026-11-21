@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 — 2026-11-20 — Windows 后台会话无窗口启动
+
+- Windows 上的 `session start` 通过当前 Python 环境无窗口启动 daemon，避免虚拟环境启动器拉起解释器时出现额外终端窗口。
+
 ## 0.6.1 — 2026-11-14 — Markdown 计划字符串保真
 
 - 修复 `parse_test_plan` 对整列替换 `<br/>`，导致合法 Shell/input JSON 字符串原文被改为空格。特殊保护仅用于测试步骤列的 JSON 字符串，保留转义引号、反斜杠、中英文分号、多步骤与标准 `\|` 管道转义。
